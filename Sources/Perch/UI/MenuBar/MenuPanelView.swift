@@ -18,6 +18,11 @@ struct MenuPanelView: View {
                 .padding(.top, 12)
                 .padding(.bottom, Layout.statsGap)
 
+            if !app.agents.sessions.isEmpty {
+                AgentSessionList()
+                SectionDivider()
+            }
+
             PrimaryModuleRow(module: primary)
 
             if let notice = primary.notice {

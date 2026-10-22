@@ -47,17 +47,44 @@ final class NotchController {
             guard let self else { return }
             let target = model.targetPhase
             let badgeWidth = model.bodySize(for: .badge).width
+            let openHeight = model.bodySize(for: .expanded).height
             DispatchQueue.main.async {
                 if target == .badge, target == self.shownPhase, badgeWidth != self.shownBadgeWidth {
                     self.resizeBadge(from: self.shownBadgeWidth, to: badgeWidth)
                 }
+                if openHeight != self.shownOpenHeight {
+                    self.resizeOpen(from: self.shownOpenHeight, to: openHeight)
+                }
                 self.shownBadgeWidth = badgeWidth
+                self.shownOpenHeight = openHeight
                 self.show(target)
             }
         }
     }
 
     private var shownBadgeWidth: CGFloat = 0
+    private var shownOpenHeight: CGFloat = 0
+    private var canvasShrinkTask: Task<Void, Never>?
+
+    /// Sessions came or went, or an approval appeared: the open list changed height. The panel
+    /// grows at once and shrinks after the shape has, and an open notch springs to the new height.
+    private func resizeOpen(from old: CGFloat, to new: CGFloat) {
+        guard let canvas else { return }
+        canvasShrinkTask?.cancel()
+        let target = frame(for: model.canvasSize)
+        if target.height >= canvas.frame.height {
+            canvas.setFrame(target, display: true)
+        } else {
+            canvasShrinkTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled, let self, let canvas = self.canvas else { return }
+                canvas.setFrame(self.frame(for: self.model.canvasSize), display: true)
+            }
+        }
+        if shownPhase == .expanded, old > 0 {
+            canvasView?.setShape(height: new, spring: new > old ? Motion.drop : Motion.lift)
+        }
+    }
 
     /// A timer started or stopped, or the heat level changed, while the badge is showing:
     /// widen or narrow both sides together.
@@ -322,7 +349,9 @@ final class NotchController {
         exitWatcher = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if self.openRect.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation) {
+                // An approval keeps the notch open until it's answered.
+                if self.app.agents.pendingApproval != nil
+                    || self.openRect.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation) {
                     outsideSince = nil
                 } else if let since = outsideSince {
                     if Date().timeIntervalSince(since) > Motion.closeDelay { self.collapse() }

@@ -118,11 +118,41 @@ private struct Snapshotter {
         notch.model.forcedPhase = nil
         model.hud.dismiss()
 
+        // Coding agent sessions, from simulated hook events.
+        let ghostty = ["__CFBundleIdentifier": "com.mitchellh.ghostty"]
+        let terminal = ["__CFBundleIdentifier": "com.apple.Terminal"]
+        let agents = model.agents
+        agents.simulate(["hook_event_name": "SessionStart", "session_id": "a", "cwd": "/code/auth-service"], environment: ghostty)
+        agents.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "a", "prompt": "fix the auth bug in middleware"])
+        agents.simulate(["hook_event_name": "PreToolUse", "session_id": "a", "tool_name": "Write", "tool_input": ["file_path": "/code/auth-service/middleware.ts"]])
+        agents.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "b", "cwd": "/code/backend", "prompt": "run the server and watch logs"], environment: terminal)
+        agents.simulate(["hook_event_name": "PreToolUse", "session_id": "b", "tool_name": "Bash", "tool_input": ["command": "npm run dev"]])
+        agents.simulate(["hook_event_name": "Stop", "session_id": "c", "cwd": "/code/queries"], environment: ghostty)
+        agents.simulateUsage(AgentUsage(
+            fiveHour: .init(usedPercent: 11, resetsAt: .now.addingTimeInterval(4 * 3600 + 60)),
+            sevenDay: .init(usedPercent: 2, resetsAt: .now.addingTimeInterval(6 * 3600 + 60))
+        ))
+        notch.model.forcedPhase = .badge
+        await wait(900)
+        capture(notch.canvasWindow, as: "glance-working", background: .menuBar)
+        notch.model.forcedPhase = .expanded
+        await wait(900)
+        capture(notch.canvasWindow, as: "notch-agents", background: .menuBar)
+
+        agents.simulate(["hook_event_name": "PermissionRequest", "session_id": "b", "tool_name": "Bash", "tool_input": ["command": "npm install lodash --save"]])
+        await wait(900)
+        capture(notch.canvasWindow, as: "notch-approval", background: .menuBar)
+        notch.model.forcedPhase = .badge
+        await wait(900)
+        capture(notch.canvasWindow, as: "glance-waiting", background: .menuBar)
+        notch.model.forcedPhase = .expanded
+
         // Menu bar panel.
         statusItem.showPanel()
         await wait(700)
         capture(statusItem.panelWindow, as: "menu", background: .desktop)
         statusItem.closePanel()
+        for id in ["claude:a", "claude:b", "claude:c"] { agents.dismiss(id) }
 
         // Settings tabs.
         for tab in SettingsTab.allCases {

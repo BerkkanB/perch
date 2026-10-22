@@ -105,3 +105,81 @@ struct NoticeRow: View {
         }
     }
 }
+
+/// Soft dot that breathes, for "something is happening".
+///
+/// The pulse is a Core Animation layer animation, which the window server runs by itself.
+/// A SwiftUI animation would wake the app every frame, and this dot can stay up for hours.
+struct PulsingDot: NSViewRepresentable {
+    var tint: Color
+    var size: CGFloat = 7
+
+    func makeNSView(context: Context) -> PulseDotView {
+        PulseDotView()
+    }
+
+    func updateNSView(_ view: PulseDotView, context: Context) {
+        view.configure(color: NSColor(tint), diameter: size)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: PulseDotView, context: Context) -> CGSize? {
+        CGSize(width: size, height: size)
+    }
+}
+
+final class PulseDotView: NSView {
+    private let dot = CALayer()
+    private let halo = CALayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        halo.opacity = 0
+        layer?.addSublayer(halo)
+        layer?.addSublayer(dot)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func configure(color: NSColor, diameter: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for circle in [dot, halo] {
+            circle.backgroundColor = color.cgColor
+            circle.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+            circle.cornerRadius = diameter / 2
+        }
+        CATransaction.commit()
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        dot.position = center
+        halo.position = center
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        halo.removeAllAnimations()
+        guard window != nil else { return }
+
+        let grow = CABasicAnimation(keyPath: "transform.scale")
+        grow.fromValue = 1
+        grow.toValue = 2.6
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.6
+        fade.toValue = 0
+        for animation in [grow, fade] {
+            animation.duration = 1.4
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        }
+        let pulse = CAAnimationGroup()
+        pulse.animations = [grow, fade]
+        pulse.duration = 2.2
+        pulse.repeatCount = .infinity
+        halo.add(pulse, forKey: "pulse")
+    }
+}

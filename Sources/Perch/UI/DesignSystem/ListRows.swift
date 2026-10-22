@@ -32,13 +32,20 @@ struct StatsLine: View {
         let power = app.power
 
         HStack(spacing: 10) {
-            Image(systemName: primary.symbol)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(primary.isOn ? primary.tint : Ink.tertiary)
-
-            HStack(spacing: 6) {
-                Text("awake").fontWeight(.bold).foregroundStyle(Ink.primary)
-                AwakeValue(module: primary)
+            if let usage = app.agents.usage, usage.isCurrent() {
+                // Claude's limits lead, as in the agent list below.
+                Image(systemName: "sparkle")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Palette.stayAwake)
+                UsageReadout(usage: usage)
+            } else {
+                Image(systemName: primary.symbol)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(primary.isOn ? primary.tint : Ink.tertiary)
+                HStack(spacing: 6) {
+                    Text("awake").fontWeight(.bold).foregroundStyle(Ink.primary)
+                    AwakeValue(module: primary)
+                }
             }
 
             separator
@@ -49,9 +56,10 @@ struct StatsLine: View {
                 reading("power", "ac", color: Palette.good, extra: nil)
             }
 
-            separator
-
-            reading("temp", power.thermalState.label.lowercased(), color: thermalColor, extra: nil)
+            if app.agents.usage?.isCurrent() != true {
+                separator
+                reading("temp", power.thermalState.label.lowercased(), color: thermalColor, extra: nil)
+            }
 
             Spacer(minLength: 4)
 

@@ -17,6 +17,7 @@ final class SettingsWindowController {
         self.window = window
         if let tab, let index = SettingsTab.allCases.firstIndex(of: tab) {
             tabs?.selectedTabViewItemIndex = index
+            window.title = tab.title
         }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)

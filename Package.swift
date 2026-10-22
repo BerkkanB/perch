@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Perch", targets: ["Perch"]),
+        .executable(name: "perch-hook", targets: ["PerchHook"]),
     ],
     targets: [
         .executableTarget(
@@ -17,6 +18,11 @@ let package = Package(
                 .linkedFramework("IOKit"),
                 .linkedFramework("ServiceManagement"),
             ]
+        ),
+        // Tiny Foundation-only helper that coding agents' hooks run; it forwards each event to Perch.
+        .executableTarget(
+            name: "PerchHook",
+            path: "Sources/PerchHook"
         ),
         .testTarget(
             name: "PerchTests",

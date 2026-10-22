@@ -15,6 +15,7 @@ BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 
 echo "› Compiling ($CONFIG)…"
 swift build -c "$CONFIG" --product "$APP_NAME"
+swift build -c "$CONFIG" --product perch-hook
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 
 if [[ ! -f Resources/AppIcon.icns ]]; then
@@ -25,8 +26,9 @@ fi
 APP="build/$APP_NAME.app"
 echo "› Assembling $APP"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
+cp "$BIN_DIR/perch-hook" "$APP/Contents/Helpers/perch-hook"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 sed -e "s/__BUNDLE_ID__/$BUNDLE_ID/" \
     -e "s/__VERSION__/$VERSION/" \
@@ -35,6 +37,7 @@ sed -e "s/__BUNDLE_ID__/$BUNDLE_ID/" \
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 echo "› Signing (${SIGN_IDENTITY})"
+codesign --force --timestamp=none --sign "$SIGN_IDENTITY" "$APP/Contents/Helpers/perch-hook" >/dev/null
 codesign --force --timestamp=none --sign "$SIGN_IDENTITY" "$APP" >/dev/null
 
 echo "✓ Built $APP ($VERSION, build $BUILD_NUMBER)"

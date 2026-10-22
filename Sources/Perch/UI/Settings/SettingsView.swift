@@ -2,11 +2,12 @@ import SwiftUI
 
 /// The tabs of the Settings window. Each is a grouped form, like System Settings.
 enum SettingsTab: CaseIterable {
-    case general, shortcuts, stayAwake, permissions
+    case general, agents, shortcuts, stayAwake, permissions
 
     var title: String {
         switch self {
         case .general: "General"
+        case .agents: "Agents"
         case .shortcuts: "Shortcuts"
         case .stayAwake: "Stay Awake"
         case .permissions: "Permissions"
@@ -16,6 +17,7 @@ enum SettingsTab: CaseIterable {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .agents: "sparkle"
         case .shortcuts: "command"
         case .stayAwake: "sun.max"
         case .permissions: "lock"
@@ -24,7 +26,8 @@ enum SettingsTab: CaseIterable {
 
     var height: CGFloat {
         switch self {
-        case .general: 356
+        case .general: 400
+        case .agents: 272
         case .shortcuts: 196
         case .stayAwake: 268
         case .permissions: 250
@@ -35,6 +38,7 @@ enum SettingsTab: CaseIterable {
     var view: some View {
         switch self {
         case .general: GeneralSettings()
+        case .agents: AgentSettings()
         case .shortcuts: ShortcutSettings()
         case .stayAwake: StayAwakeSettings()
         case .permissions: PermissionSettings()
@@ -77,6 +81,7 @@ struct GeneralSettings: View {
                 Toggle("Show Perch in the notch", isOn: $prefs.notchEnabled)
                 Group {
                     Toggle("Open when the pointer rests on the notch", isOn: $prefs.notchExpandsOnHover)
+                    Toggle("Show what agents are doing beside the camera", isOn: $prefs.notchShowsAgentActivity)
                     Toggle("Show an icon beside the camera while a switch is on", isOn: $prefs.notchShowsBadge)
                     Toggle("Show a brief message when something changes", isOn: $prefs.notchShowsHUD)
                 }
@@ -95,6 +100,53 @@ struct GeneralSettings: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "dev"
         let build = info?["CFBundleVersion"] as? String
         return build.map { "\(short) (\($0))" } ?? short
+    }
+}
+
+// MARK: Agents
+
+struct AgentSettings: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        @Bindable var prefs = app.prefs
+        let claude = app.agents.claude
+
+        SettingsPage(tab: .agents) {
+            Section {
+                LabeledContent {
+                    if claude.isConnected {
+                        Button("Disconnect") { claude.disconnect() }
+                    } else {
+                        Button("Connect") { claude.connect() }
+                    }
+                } label: {
+                    Text("Claude Code")
+                    Text(claude.isConnected
+                         ? "Connected. Sessions, approvals and usage show in the notch."
+                         : "Not connected.")
+                }
+                if let error = claude.lastError {
+                    Text(error).font(.callout).foregroundStyle(Palette.danger)
+                }
+                if let error = app.agents.serverError {
+                    Text(error).font(.callout).foregroundStyle(Palette.danger)
+                }
+            } header: {
+                Text("Coding Agents")
+            } footer: {
+                Text("Connecting adds hooks and a status line to ~/.claude/settings.json; the previous file is kept in ~/.perch/backups. Sessions started afterwards show up in Perch.")
+            }
+
+            Section {
+                Toggle(isOn: $prefs.agentApprovalsInNotch) {
+                    Text("Ask for approvals in the notch")
+                    Text("Otherwise Claude Code asks in its terminal as usual.")
+                }
+                Toggle("Show a message when an agent finishes", isOn: $prefs.agentShowsFinished)
+            }
+        }
+        .onAppear { claude.refresh() }
     }
 }
 

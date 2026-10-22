@@ -53,6 +53,28 @@ A closed MacBook that never sleeps can overheat in a bag, so Stay Awake also:
 
 Changes made in the Terminal (`sudo pmset -a disablesleep …`) show up in Perch within 10 seconds.
 
+## Coding agents
+
+Perch can follow your Claude Code sessions in the notch, like the Dynamic Island:
+
+- **Sessions**: the most important one written out (project, your last prompt, what it's doing
+  now in blue), the others one line each with a dot: blue working, orange needs you, green done.
+  Click one to bring its terminal forward.
+- **Approvals**: when Claude Code asks for permission, the notch opens with the command and
+  **Allow** / **Deny**. "Answer in Terminal" (or ignoring it) leaves the choice to Claude Code's
+  own prompt.
+- **Usage**: the top line shows Claude's 5-hour and weekly limits: `5h 11% 4h1m | 7d 2% 6h1m`.
+- A short message when a session finishes.
+
+Turn it on in **Settings → Agents → Connect**. That adds hooks and a status line to
+`~/.claude/settings.json` (your previous file is kept in `~/.perch/backups`, and any status line
+you had keeps working). Sessions started after connecting show up. **Disconnect** removes only
+Perch's entries.
+
+How it works: Claude Code runs `~/.perch/bin/perch-hook` for each event; the helper forwards it
+to Perch over a Unix socket in `~/.perch` that only your user can open. If Perch isn't running,
+the helper exits at once and Claude Code behaves as if Perch weren't there.
+
 ## Adding a switch
 
 Every tool is a class that conforms to `PerchModule`. The menu panel, notch controls, right-click

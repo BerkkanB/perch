@@ -137,6 +137,27 @@ change is a short cross-fade.
 - Settings: a standard preferences window with toolbar tabs and grouped forms.
 - System colors for states (orange Stay Awake, blue Screen On, green/yellow/red readings).
 
+## Coding agents (phase 1: Claude Code)
+
+Modelled on Vibe Island. Claude Code's hooks call `perch-hook` (a small Foundation-only helper
+shipped in `Perch.app/Contents/Helpers` and installed to `~/.perch/bin`), which forwards each
+event plus terminal details (`__CFBundleIdentifier`, `TERM_PROGRAM`, tty, tmux pane) to Perch over
+`~/.perch/agent.sock` (0600, in a 0700 folder).
+
+- Events: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse(Failure), PermissionRequest,
+  Notification, Stop, StopFailure, SessionEnd → one card per session.
+- Approvals: the helper holds the `PermissionRequest` open (hook timeout 600 s) until Allow or
+  Deny in the notch, then prints Claude Code's decision JSON. "Answer in Terminal", a later event
+  for the session, Perch quitting, or the timeout all return no decision, so Claude Code's own
+  prompt takes over. The notch opens by itself and stays open while a request waits.
+- Usage: the status line command forwards Claude Code's `rate_limits.five_hour` / `seven_day` to
+  Perch and prints a short line (or runs the status line the user had before).
+- Connect / Disconnect edit `~/.claude/settings.json` with pure merge functions (tested): only
+  entries running `perch-hook` are added or removed; the file is backed up first.
+
+Phase 2: Codex (`[hooks]` in `~/.codex/config.toml`) and Gemini CLI, exact tab jumps (Terminal,
+iTerm via AppleScript; tmux panes), sounds.
+
 ## Ideas for later modules
 
 - Kill whatever is listening on a port (`lsof -ti :3000 | xargs kill`)

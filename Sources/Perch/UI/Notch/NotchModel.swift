@@ -70,10 +70,23 @@ final class NotchModel {
 
     var targetPhase: Phase {
         if let forcedPhase { return forcedPhase }
+        // An agent waiting for approval opens the notch by itself and keeps it open.
+        if app.agents.pendingApproval != nil { return .expanded }
         if isExpanded { return .expanded }
         if app.prefs.notchShowsHUD, app.hud.current != nil { return .hud }
-        if geometry.hasNotch, app.prefs.notchShowsBadge, badgeModule != nil { return .badge }
+        if geometry.hasNotch, glanceSession != nil || (app.prefs.notchShowsBadge && badgeModule != nil) { return .badge }
         return .idle
+    }
+
+    /// The agent the collapsed notch shows: the most important one working or waiting for you.
+    /// It takes the badge's place while there is one.
+    var glanceSession: AgentSession? {
+        app.prefs.notchShowsAgentActivity ? app.agents.activeSessions.first : nil
+    }
+
+    /// Other agents working or waiting, shown as "+N".
+    var otherActiveSessions: Int {
+        max(0, app.agents.activeSessions.count - 1)
     }
 
     /// The module the badge is about: the first one that is on.
@@ -96,6 +109,7 @@ final class NotchModel {
     /// How far the badge extends on each side of the camera. Both sides always match, sized for
     /// the fuller one: the symbol (and a thermometer when hot) on the left, time left on the right.
     var badgeWing: CGFloat {
+        if glanceSession != nil { return 112 }
         if badgeModule?.timer?.isRunning == true { return 58 }
         return isRunningHot ? 50 : 32
     }
@@ -117,6 +131,19 @@ final class NotchModel {
         static let bottom: CGFloat = 10
         static let panelInset: CGFloat = 12
         static let rowInset: CGFloat = 14
+
+        // Coding agent sessions, above the switches.
+        static let approvalDetailHeight: CGFloat = 52
+        static let approvalButtonsHeight: CGFloat = 28
+        static let moreRowHeight: CGFloat = 24
+        static let maxCompactSessions = 3
+        /// The line between the sessions and the switches, with its margins.
+        static let sectionDivider: CGFloat = 13
+
+        static func sessionCardHeight(hasApproval: Bool) -> CGFloat {
+            let base: CGFloat = 82
+            return hasApproval ? base + 8 + approvalDetailHeight + 8 + approvalButtonsHeight : base
+        }
     }
 
     /// The black body for `phase`, not counting the small curves at the top corners.
@@ -155,6 +182,19 @@ final class NotchModel {
     var expandedHeight: CGFloat {
         let rows = CGFloat(app.secondary.count)
         return geometry.notchHeight + List.statsTop + List.statsHeight + List.statsGap
+            + sessionsHeight
             + List.primaryHeight + rows * (List.rowHeight + List.rowSpacing) + List.bottom
+    }
+
+    /// The agent sessions block, divider included; nothing when there are no sessions.
+    var sessionsHeight: CGFloat {
+        let sessions = app.agents.sessions
+        guard let first = sessions.first else { return 0 }
+        let compact = min(sessions.count - 1, List.maxCompactSessions)
+        let hidden = sessions.count - 1 - compact
+        var height = List.sessionCardHeight(hasApproval: first.approval != nil)
+        height += CGFloat(compact) * (List.rowSpacing + List.rowHeight)
+        if hidden > 0 { height += List.rowSpacing + List.moreRowHeight }
+        return height + List.sectionDivider
     }
 }

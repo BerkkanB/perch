@@ -13,6 +13,7 @@ final class AppModel {
     let access: PrivilegedAccess
     let loginItem = LoginItem()
     let hotKeys = HotKeyCenter.shared
+    let agents: AgentCenter
 
     let stayAwake: StayAwakeModule
     let modules: [any PerchModule]
@@ -25,6 +26,7 @@ final class AppModel {
     init(defaults: UserDefaults = .standard) {
         prefs = Preferences(defaults: defaults)
         access = PrivilegedAccess(prefs: prefs)
+        agents = AgentCenter(prefs: prefs, hud: hud)
 
         let context = ModuleContext(prefs: prefs, access: access, power: power, hud: hud, defaults: defaults)
         stayAwake = StayAwakeModule(context: context)
@@ -47,6 +49,10 @@ final class AppModel {
         power.start()
         modules.forEach { $0.start() }
         registerShortcuts()
+        // Snapshot runs of a debug build must not take the agent socket from the running app.
+        if !CommandLine.arguments.contains("--snapshot") {
+            agents.start()
+        }
     }
 
     func refreshAll() {
@@ -82,6 +88,7 @@ final class AppModel {
     // MARK: Quitting
 
     func prepareForQuit() async {
+        agents.stop()
         for module in modules {
             await module.prepareForQuit()
         }

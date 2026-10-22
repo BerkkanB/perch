@@ -10,6 +10,7 @@ final class Preferences {
     var notchExpandsOnHover: Bool { didSet { save(notchExpandsOnHover, .notchExpandsOnHover) } }
     var notchShowsBadge: Bool { didSet { save(notchShowsBadge, .notchShowsBadge) } }
     var notchShowsHUD: Bool { didSet { save(notchShowsHUD, .notchShowsHUD) } }
+    var notchShowsAgentActivity: Bool { didSet { save(notchShowsAgentActivity, .notchShowsAgentActivity) } }
 
     // Menu bar
     var menuBarShowsCountdown: Bool { didSet { save(menuBarShowsCountdown, .menuBarShowsCountdown) } }
@@ -19,6 +20,10 @@ final class Preferences {
     var batteryGuardThreshold: Int { didSet { save(batteryGuardThreshold, .batteryGuardThreshold) } }
     var heatGuardEnabled: Bool { didSet { save(heatGuardEnabled, .heatGuardEnabled) } }
     var restoreSleepOnQuit: Bool { didSet { save(restoreSleepOnQuit, .restoreSleepOnQuit) } }
+
+    // Coding agents
+    var agentApprovalsInNotch: Bool { didSet { save(agentApprovalsInNotch, .agentApprovalsInNotch) } }
+    var agentShowsFinished: Bool { didSet { save(agentShowsFinished, .agentShowsFinished) } }
 
     // Bookkeeping
     var hasLaunchedBefore: Bool { didSet { save(hasLaunchedBefore, .hasLaunchedBefore) } }
@@ -43,22 +48,28 @@ final class Preferences {
             Key.notchExpandsOnHover.rawValue: true,
             Key.notchShowsBadge.rawValue: true,
             Key.notchShowsHUD.rawValue: true,
+            Key.notchShowsAgentActivity.rawValue: true,
             Key.menuBarShowsCountdown.rawValue: true,
             Key.batteryGuardEnabled.rawValue: true,
             Key.batteryGuardThreshold.rawValue: 15,
             Key.heatGuardEnabled.rawValue: true,
             Key.restoreSleepOnQuit.rawValue: false,
+            Key.agentApprovalsInNotch.rawValue: true,
+            Key.agentShowsFinished.rawValue: true,
         ])
 
         notchEnabled = defaults.bool(forKey: Key.notchEnabled.rawValue)
         notchExpandsOnHover = defaults.bool(forKey: Key.notchExpandsOnHover.rawValue)
         notchShowsBadge = defaults.bool(forKey: Key.notchShowsBadge.rawValue)
         notchShowsHUD = defaults.bool(forKey: Key.notchShowsHUD.rawValue)
+        notchShowsAgentActivity = defaults.bool(forKey: Key.notchShowsAgentActivity.rawValue)
         menuBarShowsCountdown = defaults.bool(forKey: Key.menuBarShowsCountdown.rawValue)
         batteryGuardEnabled = defaults.bool(forKey: Key.batteryGuardEnabled.rawValue)
         batteryGuardThreshold = defaults.integer(forKey: Key.batteryGuardThreshold.rawValue)
         heatGuardEnabled = defaults.bool(forKey: Key.heatGuardEnabled.rawValue)
         restoreSleepOnQuit = defaults.bool(forKey: Key.restoreSleepOnQuit.rawValue)
+        agentApprovalsInNotch = defaults.bool(forKey: Key.agentApprovalsInNotch.rawValue)
+        agentShowsFinished = defaults.bool(forKey: Key.agentShowsFinished.rawValue)
         hasLaunchedBefore = defaults.bool(forKey: Key.hasLaunchedBefore.rawValue)
         installedRuleDigest = defaults.string(forKey: Key.installedRuleDigest.rawValue)
         shortcuts = defaults.data(forKey: Key.shortcuts.rawValue)
@@ -81,9 +92,10 @@ final class Preferences {
     // MARK: Storage
 
     private enum Key: String {
-        case notchEnabled, notchExpandsOnHover, notchShowsBadge, notchShowsHUD
+        case notchEnabled, notchExpandsOnHover, notchShowsBadge, notchShowsHUD, notchShowsAgentActivity
         case menuBarShowsCountdown
         case batteryGuardEnabled, batteryGuardThreshold, heatGuardEnabled, restoreSleepOnQuit
+        case agentApprovalsInNotch, agentShowsFinished
         case hasLaunchedBefore, installedRuleDigest, shortcuts
     }
 
