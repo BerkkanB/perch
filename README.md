@@ -60,9 +60,12 @@ Perch can follow your Claude Code sessions in the notch, like the Dynamic Island
 - **Sessions**: the most important one written out (project, your last prompt, what it's doing
   now in blue), the others one line each with a dot: blue working, orange needs you, green done.
   Click one to bring its terminal forward.
-- **Approvals**: when Claude Code asks for permission, the notch opens with the command and
-  **Allow** / **Deny**. "Answer in Terminal" (or ignoring it) leaves the choice to Claude Code's
-  own prompt.
+- **Approvals**: when Claude Code asks for permission, the notch opens with the whole command
+  (long ones scroll) and **Allow** / **Deny**. "Answer in Terminal" (or ignoring it) leaves the
+  choice to Claude Code's own prompt.
+- **Questions**: when Claude asks you something (its multiple-choice questions), the notch shows
+  each question with its options, as radio buttons or checkboxes when you can pick several, and
+  **Submit** sends your picks back. To type an answer of your own, use "Answer in Terminal".
 - **Usage**: the top line shows Claude's 5-hour and weekly limits: `5h 11% 4h1m | 7d 2% 6h1m`.
 - A short message when a session finishes.
 
@@ -74,6 +77,18 @@ Perch's entries.
 How it works: Claude Code runs `~/.perch/bin/perch-hook` for each event; the helper forwards it
 to Perch over a Unix socket in `~/.perch` that only your user can open. If Perch isn't running,
 the helper exits at once and Claude Code behaves as if Perch weren't there.
+
+## StandBy
+
+A full-screen status screen, like StandBy on iPhone: a large clock and the date, the
+`5h / 7d / battery` line, and your coding agents. Open it from the right-click menu, the menu bar
+panel, a shortcut (Settings → Shortcuts), or after the Mac is idle for a while (Settings →
+StandBy). While it shows, the display stays on, so the screen saver and macOS's auto-lock don't
+start.
+
+Closing it asks for Touch ID or your password by default, and until then app switching is
+blocked and agent approvals can't be answered from it. It's a privacy screen, not a replacement
+for the macOS lock: keep "Require password … Immediately" on in System Settings → Lock Screen.
 
 ## Adding a switch
 

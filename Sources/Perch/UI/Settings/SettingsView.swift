@@ -2,12 +2,13 @@ import SwiftUI
 
 /// The tabs of the Settings window. Each is a grouped form, like System Settings.
 enum SettingsTab: CaseIterable {
-    case general, agents, shortcuts, stayAwake, permissions
+    case general, agents, standby, shortcuts, stayAwake, permissions
 
     var title: String {
         switch self {
         case .general: "General"
         case .agents: "Agents"
+        case .standby: "StandBy"
         case .shortcuts: "Shortcuts"
         case .stayAwake: "Stay Awake"
         case .permissions: "Permissions"
@@ -18,6 +19,7 @@ enum SettingsTab: CaseIterable {
         switch self {
         case .general: "gearshape"
         case .agents: "sparkle"
+        case .standby: "moon.stars"
         case .shortcuts: "command"
         case .stayAwake: "sun.max"
         case .permissions: "lock"
@@ -28,7 +30,8 @@ enum SettingsTab: CaseIterable {
         switch self {
         case .general: 400
         case .agents: 272
-        case .shortcuts: 196
+        case .standby: 350
+        case .shortcuts: 236
         case .stayAwake: 268
         case .permissions: 250
         }
@@ -39,6 +42,7 @@ enum SettingsTab: CaseIterable {
         switch self {
         case .general: GeneralSettings()
         case .agents: AgentSettings()
+        case .standby: StandBySettings()
         case .shortcuts: ShortcutSettings()
         case .stayAwake: StayAwakeSettings()
         case .permissions: PermissionSettings()
@@ -150,6 +154,43 @@ struct AgentSettings: View {
     }
 }
 
+// MARK: StandBy
+
+struct StandBySettings: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        @Bindable var prefs = app.prefs
+
+        SettingsPage(tab: .standby) {
+            Section {
+                Picker("Open when the Mac is idle for", selection: $prefs.standbyIdleMinutes) {
+                    Text("Never").tag(0)
+                    ForEach([2, 5, 10, 15, 30], id: \.self) { Text("\($0) minutes").tag($0) }
+                }
+                Toggle(isOn: $prefs.standbyRequiresAuth) {
+                    Text("Ask for Touch ID or password to close")
+                    Text("Also blocks switching apps and answering agents until it's closed.")
+                }
+                Picker(selection: $prefs.standbyLockAfterMinutes) {
+                    Text("Never").tag(0)
+                    ForEach([5, 10, 15, 30, 60], id: \.self) { Text("\($0) minutes").tag($0) }
+                } label: {
+                    Text("Hand over to the macOS lock after")
+                    Text("Turns the display off so macOS locks as usual. StandBy also closes whenever macOS locks.")
+                }
+                LabeledContent("Open it now") {
+                    Button("Open StandBy") { app.openStandBy() }
+                }
+            } header: {
+                Text("StandBy")
+            } footer: {
+                Text("A full-screen clock with your agents, Stay Awake and battery. It keeps the display on, so macOS won't lock by itself while it shows; it's a privacy screen, not a replacement for the macOS lock.")
+            }
+        }
+    }
+}
+
 // MARK: Shortcuts
 
 struct ShortcutSettings: View {
@@ -165,6 +206,9 @@ struct ShortcutSettings: View {
                 }
                 LabeledContent("Open Perch Menu") {
                     ShortcutRecorder(name: AppModel.menuShortcutName, fallback: nil)
+                }
+                LabeledContent("Open StandBy") {
+                    ShortcutRecorder(name: AppModel.standbyShortcutName, fallback: nil)
                 }
             } header: {
                 Text("Keyboard Shortcuts")

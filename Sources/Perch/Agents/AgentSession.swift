@@ -37,6 +37,7 @@ struct AgentSession: Identifiable, Equatable {
     /// What the collapsed notch shows for this session.
     var badgeGlance: AgentGlance {
         switch state {
+        case .waiting where approval?.questions.isEmpty == false: AgentGlance(symbol: "questionmark.bubble.fill", text: "asks you")
         case .waiting: AgentGlance(symbol: "hand.raised.fill", text: "needs you")
         case .done: AgentGlance(symbol: "checkmark", text: "done")
         case .idle: AgentGlance(symbol: "pause.fill", text: "idle")
@@ -47,7 +48,12 @@ struct AgentSession: Identifiable, Equatable {
     /// The line under the prompt: what it's doing, or its state.
     var statusText: String {
         switch state {
-        case .waiting: approval.map { "Needs approval · \($0.tool)" } ?? "Needs your approval"
+        case .waiting:
+            if let questions = approval?.questions, !questions.isEmpty {
+                questions.count == 1 ? "Has a question for you" : "Has \(questions.count) questions for you"
+            } else {
+                approval.map { "Needs approval · \($0.tool)" } ?? "Needs your approval"
+            }
         case .working: activity ?? "Working…"
         case .done: "Done"
         case .idle: "Waiting for your prompt"
@@ -71,12 +77,57 @@ struct AgentGlance: Equatable {
     var text: String
 }
 
-/// A tool call waiting for Allow or Deny.
+/// A tool call waiting for Allow or Deny, or Claude's questions waiting for answers.
 struct PendingApproval: Equatable {
     let id = UUID()
     var tool: String
-    /// The command, file or URL it wants to use.
+    /// The command, file, URL or plan it wants to use, in full.
     var detail: String
+    /// What it says the command is for, when it says.
+    var summary: String?
+    /// Claude's multiple-choice questions, when the tool is AskUserQuestion.
+    var questions: [AgentQuestion]
+
+    init(tool: String, input: [String: Any]) {
+        self.tool = tool
+        questions = tool == "AskUserQuestion" ? AgentQuestion.questions(in: input) : []
+        detail = questions.isEmpty ? ToolDescription.detail(tool: tool, input: input) : ""
+        summary = (input["description"] as? String).flatMap { $0.isEmpty ? nil : ToolDescription.firstLine($0, limit: 120) }
+    }
+}
+
+/// One of Claude's multiple-choice questions (the AskUserQuestion tool).
+struct AgentQuestion: Equatable {
+    struct Option: Equatable {
+        var label: String
+        var description: String
+    }
+
+    /// The full question; its answer goes back under this text.
+    var question: String
+    /// A short label, e.g. "Version".
+    var header: String
+    var options: [Option]
+    var multiSelect: Bool
+
+    /// The questions in an AskUserQuestion input.
+    static func questions(in input: [String: Any]) -> [AgentQuestion] {
+        guard let items = input["questions"] as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let question = item["question"] as? String, !question.isEmpty else { return nil }
+            let options = (item["options"] as? [[String: Any]] ?? []).compactMap { option -> Option? in
+                guard let label = option["label"] as? String, !label.isEmpty else { return nil }
+                return Option(label: label, description: option["description"] as? String ?? "")
+            }
+            guard !options.isEmpty else { return nil }
+            return AgentQuestion(
+                question: question,
+                header: item["header"] as? String ?? "",
+                options: options,
+                multiSelect: item["multiSelect"] as? Bool ?? false
+            )
+        }
+    }
 }
 
 /// The terminal (or editor) an agent runs in, from the environment its hook ran with.
@@ -193,6 +244,10 @@ enum ToolDescription {
             return "Running a subagent"
         case "TodoWrite":
             return "Updating its plan"
+        case "AskUserQuestion":
+            return "Asking you a question"
+        case "ExitPlanMode":
+            return "Presenting its plan"
         default:
             if tool.hasPrefix("mcp__") {
                 let parts = tool.split(separator: "_", omittingEmptySubsequences: true)
@@ -220,25 +275,34 @@ enum ToolDescription {
             return AgentGlance(symbol: "globe", text: "web search")
         case "Task", "Agent":
             return AgentGlance(symbol: "person.2", text: "subagent")
-        case "TodoWrite":
+        case "TodoWrite", "ExitPlanMode":
             return AgentGlance(symbol: "checklist", text: "plan")
+        case "AskUserQuestion":
+            return AgentGlance(symbol: "questionmark.bubble", text: "question")
         default:
             let name = tool.hasPrefix("mcp__") ? tool.split(separator: "_").last.map(String.init) ?? tool : tool
             return AgentGlance(symbol: "hammer", text: name)
         }
     }
 
-    /// What an approval is about: the command, file or URL.
+    /// What an approval is about, in full: the command, file, URL or plan, else the whole input.
     static func detail(tool: String, input: [String: Any]) -> String {
-        for key in ["command", "file_path", "notebook_path", "url", "query", "pattern"] {
+        for key in ["command", "file_path", "notebook_path", "url", "query", "pattern", "plan", "prompt"] {
             if let value = input[key] as? String, !value.isEmpty {
-                return firstLine(value, limit: 160)
+                return clipped(value)
             }
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys]),
+        guard !input.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]),
               let json = String(data: data, encoding: .utf8)
-        else { return tool }
-        return firstLine(json, limit: 160)
+        else { return "" }
+        return clipped(json)
+    }
+
+    /// `text` without surrounding blank lines, cut short if it is very long.
+    private static func clipped(_ text: String, limit: Int = 4000) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count > limit ? String(trimmed.prefix(limit - 1)) + "…" : trimmed
     }
 
     static func firstLine(_ text: String, limit: Int) -> String {

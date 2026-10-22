@@ -8,6 +8,8 @@ struct MenuPanelView: View {
     @Environment(AppModel.self) private var app
     @State private var accessError: String?
 
+    static let width: CGFloat = 440
+
     var body: some View {
         let primary = app.primary
 
@@ -23,7 +25,7 @@ struct MenuPanelView: View {
                 SectionDivider()
             }
 
-            PrimaryModuleRow(module: primary)
+            ControlsSection()
 
             if let notice = primary.notice {
                 NoticeRow(notice: notice)
@@ -34,11 +36,6 @@ struct MenuPanelView: View {
             }
 
             VStack(spacing: Layout.rowSpacing) {
-                ForEach(app.secondary, id: \.id) { module in
-                    CompactModuleRow(module: module)
-                        .frame(height: Layout.rowHeight)
-                }
-
                 if app.access.needsAttention {
                     ActionRow(
                         symbol: "key.fill",
@@ -74,8 +71,9 @@ struct MenuPanelView: View {
         }
         .padding(.horizontal, Layout.panelInset)
         .padding(.bottom, 8)
-        .frame(width: 440)
+        .frame(width: Self.width)
         .environment(\.colorScheme, .dark)
+        .environment(\.agentListWidth, Self.width - 2 * Layout.panelInset)
         .animation(.easeInOut(duration: 0.2), value: primary.notice)
         .animation(.easeInOut(duration: 0.2), value: app.access.needsAttention)
     }

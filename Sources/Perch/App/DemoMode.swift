@@ -11,7 +11,8 @@ enum DemoMode {
         model: AppModel,
         notch: NotchController,
         statusItem: StatusItemController,
-        settings: SettingsWindowController
+        settings: SettingsWindowController,
+        standby: StandByController
     ) {
         #if DEBUG
         func value(after flag: String) -> String? {
@@ -28,7 +29,7 @@ enum DemoMode {
         }
         if let directory = value(after: "--snapshot") {
             Task {
-                await Snapshotter(directory: directory).run(model: model, notch: notch, statusItem: statusItem, settings: settings)
+                await Snapshotter(directory: directory).run(model: model, notch: notch, statusItem: statusItem, settings: settings, standby: standby)
                 exit(0)
             }
         }
@@ -60,7 +61,7 @@ private struct Snapshotter {
 
     private typealias CaptureFunction = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
 
-    func run(model: AppModel, notch: NotchController, statusItem: StatusItemController, settings: SettingsWindowController) async {
+    func run(model: AppModel, notch: NotchController, statusItem: StatusItemController, settings: SettingsWindowController, standby: StandByController) async {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         await wait(1200)
 
@@ -139,19 +140,53 @@ private struct Snapshotter {
         await wait(900)
         capture(notch.canvasWindow, as: "notch-agents", background: .menuBar)
 
-        agents.simulate(["hook_event_name": "PermissionRequest", "session_id": "b", "tool_name": "Bash", "tool_input": ["command": "npm install lodash --save"]])
-        await wait(900)
+        agents.simulate(["hook_event_name": "PermissionRequest", "session_id": "b", "tool_name": "Bash", "tool_input": [
+            "command": "npm install lodash --save &&\n  npm run build -- --mode production &&\n  git add -A && git commit -m \"Add lodash and rebuild the production bundle\" &&\n  git push origin main",
+            "description": "Install lodash, rebuild and push",
+        ]])
+        await wait(1500)
         capture(notch.canvasWindow, as: "notch-approval", background: .menuBar)
         notch.model.forcedPhase = .badge
         await wait(900)
         capture(notch.canvasWindow, as: "glance-waiting", background: .menuBar)
         notch.model.forcedPhase = .expanded
 
+        agents.simulate(["hook_event_name": "PermissionRequest", "session_id": "b", "tool_name": "AskUserQuestion", "tool_input": ["questions": [
+            [
+                "question": "Which version bump should I use for this release?",
+                "header": "Version",
+                "multiSelect": false,
+                "options": [
+                    ["label": "Minor (1.4.0)", "description": "New features: the agents panel and StandBy. Nothing that worked before breaks."],
+                    ["label": "Patch (1.3.1)", "description": "Only if you'd rather ship the fixes now and the features later."],
+                    ["label": "Major (2.0.0)", "description": "Signals a big change, though nothing is incompatible."],
+                ],
+            ],
+            [
+                "question": "What should the release notes cover?",
+                "header": "Notes",
+                "multiSelect": true,
+                "options": [
+                    ["label": "New features", "description": "Agents in the notch, StandBy, Sleep Now"],
+                    ["label": "Fixes", "description": "Session order, long approvals"],
+                    ["label": "Known issues", "description": ""],
+                ],
+            ],
+        ]]])
+        await wait(900)
+        capture(notch.canvasWindow, as: "notch-question", background: .menuBar)
+
         // Menu bar panel.
         statusItem.showPanel()
         await wait(700)
         capture(statusItem.panelWindow, as: "menu", background: .desktop)
         statusItem.closePanel()
+
+        // StandBy, built off screen so the snapshot doesn't take over the Mac.
+        standby.show(onScreen: false)
+        await wait(1500)
+        capture(standby.contentWindow, as: "standby", background: nil)
+        standby.hide()
         for id in ["claude:a", "claude:b", "claude:c"] { agents.dismiss(id) }
 
         // Settings tabs.

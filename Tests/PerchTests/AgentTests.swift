@@ -116,6 +116,25 @@ final class AgentEventTests: XCTestCase {
     }
 
     @MainActor
+    func testTwoWorkingSessionsKeepTheirOrderAndBothUpdate() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "perch.tests.\(UUID().uuidString)"))
+        let center = AgentCenter(prefs: Preferences(defaults: defaults), hud: HUDCenter())
+        center.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "one", "cwd": "/code/app", "prompt": "add login tests"])
+        center.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "two", "cwd": "/code/app", "prompt": "fix flaky build"])
+        for step in 0..<6 {
+            let id = step.isMultiple(of: 2) ? "two" : "one"
+            center.simulate(["hook_event_name": "PreToolUse", "session_id": id, "tool_name": "Read", "tool_input": ["file_path": "/f\(step).swift"]])
+            XCTAssertEqual(center.sessions.map(\.id), ["claude:one", "claude:two"], "order must not follow the latest event")
+        }
+        XCTAssertEqual(center.sessions[0].glance?.text, "f5.swift")
+        XCTAssertEqual(center.sessions[1].glance?.text, "f4.swift")
+
+        let names = center.displayNames
+        XCTAssertEqual(names["claude:one"], "app · add login tests")
+        XCTAssertEqual(names["claude:two"], "app · fix flaky build")
+    }
+
+    @MainActor
     func testDecidingAnswersAndClears() throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "perch.tests.\(UUID().uuidString)"))
         let center = AgentCenter(prefs: Preferences(defaults: defaults), hud: HUDCenter())
@@ -124,6 +143,118 @@ final class AgentEventTests: XCTestCase {
         center.decide(id, allow: true)
         XCTAssertNil(center.pendingApproval)
         XCTAssertEqual(center.sessions.first?.state, .working)
+    }
+
+    func testLongCommandsKeepEveryLine() {
+        let command = "git add -A &&\n  git commit -m 'Release 2.0' &&\n  git push origin main"
+        XCTAssertEqual(ToolDescription.detail(tool: "Bash", input: ["command": command + "\n"]), command)
+        XCTAssertEqual(PendingApproval(tool: "Bash", input: ["command": "ls", "description": "List files"]).summary, "List files")
+        XCTAssertEqual(ToolDescription.detail(tool: "Tool", input: [:]), "")
+    }
+
+    @MainActor
+    func testPromptTagsDropTrailingPunctuation() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "perch.tests.\(UUID().uuidString)"))
+        let center = AgentCenter(prefs: Preferences(defaults: defaults), hud: HUDCenter())
+        center.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "one", "cwd": "/code/app", "prompt": "commit to main, then push"])
+        center.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "two", "cwd": "/code/app", "prompt": "fix it."])
+        XCTAssertEqual(center.displayNames["claude:one"], "app · commit to main")
+        XCTAssertEqual(center.displayNames["claude:two"], "app · fix it")
+    }
+}
+
+final class AgentQuestionTests: XCTestCase {
+    private let input: [String: Any] = ["questions": [
+        [
+            "question": "Which version bump should I use?",
+            "header": "Version",
+            "multiSelect": false,
+            "options": [
+                ["label": "Patch", "description": "Bug fixes only"],
+                ["label": "Minor", "description": "New features, nothing breaks"],
+            ],
+        ],
+        [
+            "question": "Which sections should I include?",
+            "header": "Sections",
+            "multiSelect": true,
+            "options": [
+                ["label": "Introduction", "description": "Opening context"],
+                ["label": "Usage", "description": ""],
+                ["label": "Conclusion", "description": "Final summary"],
+            ],
+        ],
+    ]]
+
+    func testQuestionsAreReadFromTheToolInput() {
+        let approval = PendingApproval(tool: "AskUserQuestion", input: input)
+        XCTAssertEqual(approval.questions.map(\.header), ["Version", "Sections"])
+        XCTAssertEqual(approval.questions[1].options.map(\.label), ["Introduction", "Usage", "Conclusion"])
+        XCTAssertTrue(approval.questions[1].multiSelect)
+        XCTAssertEqual(approval.detail, "", "questions show as options, not as raw JSON")
+        XCTAssertTrue(PendingApproval(tool: "Bash", input: input).questions.isEmpty)
+    }
+
+    func testAnswersGoBackInClaudeCodesFormat() throws {
+        let questions = AgentQuestion.questions(in: input)
+        let selections: [String: Set<String>] = [
+            "Which version bump should I use?": ["Minor"],
+            "Which sections should I include?": ["Conclusion", "Introduction"],
+        ]
+        let updated = AgentCenter.answeredInput(input, questions: questions, selections: selections)
+        let reply = try XCTUnwrap(AgentCenter.permissionReply(allow: true, updatedInput: updated))
+        let output = try XCTUnwrap(JSONSerialization.jsonObject(with: reply) as? [String: Any])
+        let hook = try XCTUnwrap(output["hookSpecificOutput"] as? [String: Any])
+        XCTAssertEqual(hook["hookEventName"] as? String, "PermissionRequest")
+        let decision = try XCTUnwrap(hook["decision"] as? [String: Any])
+        XCTAssertEqual(decision["behavior"] as? String, "allow")
+        let updatedInput = try XCTUnwrap(decision["updatedInput"] as? [String: Any])
+        XCTAssertEqual((updatedInput["questions"] as? [Any])?.count, 2, "the original questions go back too")
+        XCTAssertEqual(updatedInput["answers"] as? [String: String], [
+            "Which version bump should I use?": "Minor",
+            // In Claude's order, not the order they were clicked.
+            "Which sections should I include?": "Introduction, Conclusion",
+        ])
+
+        let skip = try XCTUnwrap(AgentCenter.permissionReply(allow: false, message: "Skipped"))
+        let skipped = try XCTUnwrap(JSONSerialization.jsonObject(with: skip) as? [String: Any])
+        let denial = try XCTUnwrap((skipped["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
+        XCTAssertEqual(denial["behavior"] as? String, "deny")
+        XCTAssertEqual(denial["message"] as? String, "Skipped")
+        XCTAssertNil(denial["updatedInput"])
+    }
+
+    @MainActor
+    func testAnsweringSettlesTheSession() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "perch.tests.\(UUID().uuidString)"))
+        let center = AgentCenter(prefs: Preferences(defaults: defaults), hud: HUDCenter())
+        center.simulate(["hook_event_name": "PermissionRequest", "session_id": "a", "cwd": "/code/app", "tool_name": "AskUserQuestion", "tool_input": input])
+        let session = try XCTUnwrap(center.pendingApproval)
+        XCTAssertEqual(session.statusText, "Has 2 questions for you")
+        XCTAssertEqual(session.badgeGlance.text, "asks you")
+
+        center.answer(session.id, selections: ["Which version bump should I use?": ["Patch"]])
+        XCTAssertNil(center.pendingApproval)
+        XCTAssertEqual(center.sessions.first?.activity, "Answered")
+    }
+
+    func testTheCardGrowsWithItsQuestionsAndStopsAtALimit() {
+        func height(_ input: [String: Any], tool: String = "AskUserQuestion") -> CGFloat {
+            var session = AgentSession(id: "s", agent: .claude, cwd: "/a", state: .waiting, startedAt: .now, updatedAt: .now)
+            session.approval = PendingApproval(tool: tool, input: input)
+            return NotchModel.List.sessionCardHeight(for: session, listWidth: 476)
+        }
+        let one = height(["questions": [(input["questions"] as! [[String: Any]])[0]]])
+        let two = height(input)
+        let many = height(["questions": Array(repeating: (input["questions"] as! [[String: Any]])[1], count: 4)])
+        XCTAssertGreaterThan(two, one)
+        XCTAssertLessThanOrEqual(many, 82 + 8 + 360 + 8 + 28)
+
+        let short = height(["command": "ls"], tool: "Bash")
+        let long = height(["command": Array(repeating: "echo step", count: 8).joined(separator: "\n")], tool: "Bash")
+        let huge = height(["command": Array(repeating: "echo step", count: 200).joined(separator: "\n")], tool: "Bash")
+        XCTAssertGreaterThan(long, short + 80, "every line of a long command shows")
+        XCTAssertLessThanOrEqual(huge, 82 + 8 + 20 + 15 + 6 + 220 + 8 + 28)
     }
 }
 

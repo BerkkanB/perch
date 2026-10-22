@@ -129,9 +129,11 @@ change is a short cross-fade.
 
 - Black surfaces for the notch and the menu bar panel, with the same list in both:
   - a monospaced stats line: `awake 1h12m | bat 80% 3h40m | temp cool`, values colored by state,
-  - the main module written out: symbol (in its color while on), title, a gray description,
-    and a duration track `∞ 15m 30m 1h 2h 4h` whose thumb slides to the choice,
-  - one line per other module: a dot in its color while on, and the title.
+  - the coding agent sessions (see below), then the switches together:
+  - the main module in one line: symbol and name (click to toggle) with the duration track
+    `∞ 15m 30m 1h 2h 4h` beside it, its thumb sliding to the choice,
+  - the other modules and StandBy as Control Center-style tiles, two per row, filled with the
+    module's color while on.
 - Controls are SwiftUI rather than AppKit, because the notch panel never becomes key (it must
   not take your typing focus) and AppKit controls draw dimmed there.
 - Settings: a standard preferences window with toolbar tabs and grouped forms.
@@ -149,7 +151,14 @@ event plus terminal details (`__CFBundleIdentifier`, `TERM_PROGRAM`, tty, tmux p
 - Approvals: the helper holds the `PermissionRequest` open (hook timeout 600 s) until Allow or
   Deny in the notch, then prints Claude Code's decision JSON. "Answer in Terminal", a later event
   for the session, Perch quitting, or the timeout all return no decision, so Claude Code's own
-  prompt takes over. The notch opens by itself and stays open while a request waits.
+  prompt takes over. The notch opens by itself and stays open while a request waits. Allow
+  echoes the tool input back as `updatedInput`, since ExitPlanMode and AskUserQuestion don't run
+  on a bare allow.
+- Questions (`AskUserQuestion`): the card shows each question and its options (single or
+  multi-select); Submit allows with `updatedInput` = the original `questions` plus `answers`
+  (question text → chosen labels, joined with ", "), as in the hooks reference. Skip denies.
+- The card's height is measured from its text at the list's width (notch, menu and StandBy each
+  pass theirs), so the notch opens to fit; commands over 220 pt and questions over 360 pt scroll.
 - Usage: the status line command forwards Claude Code's `rate_limits.five_hour` / `seven_day` to
   Perch and prints a short line (or runs the status line the user had before).
 - Connect / Disconnect edit `~/.claude/settings.json` with pure merge functions (tested): only

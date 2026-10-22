@@ -25,6 +25,7 @@ struct TagChip: View {
 /// One monospaced line of readings: "☀ awake 1h12m | bat 80% 3h40m | temp cool".
 struct StatsLine: View {
     @Environment(AppModel.self) private var app
+    var fontSize: CGFloat = 12.5
     var onSettings: (() -> Void)?
 
     var body: some View {
@@ -35,12 +36,12 @@ struct StatsLine: View {
             if let usage = app.agents.usage, usage.isCurrent() {
                 // Claude's limits lead, as in the agent list below.
                 Image(systemName: "sparkle")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: fontSize - 1.5, weight: .bold))
                     .foregroundStyle(Palette.stayAwake)
                 UsageReadout(usage: usage)
             } else {
                 Image(systemName: primary.symbol)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: fontSize - 1.5, weight: .bold))
                     .foregroundStyle(primary.isOn ? primary.tint : Ink.tertiary)
                 HStack(spacing: 6) {
                     Text("awake").fontWeight(.bold).foregroundStyle(Ink.primary)
@@ -64,19 +65,10 @@ struct StatsLine: View {
             Spacer(minLength: 4)
 
             if let onSettings {
-                Button(action: onSettings) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Ink.tertiary)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Perch Settings")
-                .accessibilityLabel("Perch Settings")
+                StatsButton(symbol: "gearshape.fill", label: "Perch Settings", action: onSettings)
             }
         }
-        .font(Ink.stats)
+        .font(.system(size: fontSize, design: .monospaced))
         .lineLimit(1)
     }
 
@@ -117,6 +109,30 @@ struct StatsLine: View {
     }
 }
 
+/// A small gray symbol button at the end of the stats line.
+private struct StatsButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isHovered ? Ink.secondary : Ink.tertiary)
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
 /// The time left in monospaced form, "on" without a timer, "off" while off.
 private struct AwakeValue: View {
     let module: any PerchModule
@@ -136,55 +152,157 @@ private struct AwakeValue: View {
     }
 }
 
-/// The main module, written out: symbol and title, what it does, and the duration track.
-struct PrimaryModuleRow: View {
+/// The switches, reachable together: the main one in a single line with its duration track,
+/// then the other switches, StandBy and Sleep as tiles, three per row.
+struct ControlsSection: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        VStack(spacing: NotchModel.List.controlsGap) {
+            PrimaryControlRow(module: app.primary)
+                .frame(height: NotchModel.List.primaryHeight)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: NotchModel.List.tileSpacing), count: NotchModel.List.tileColumns),
+                spacing: NotchModel.List.tileSpacing
+            ) {
+                ForEach(app.secondary, id: \.id) { module in
+                    ControlTile(
+                        symbol: module.symbol,
+                        title: module.title,
+                        status: Self.status(of: module),
+                        tint: module.tint,
+                        isOn: module.isOn
+                    ) {
+                        Task { await module.toggle(source: .ui) }
+                    }
+                    .help(module.caption)
+                }
+                ControlTile(
+                    symbol: "moon.stars.fill",
+                    title: "StandBy",
+                    status: app.prefs.standbyRequiresAuth ? "Touch ID" : "Open",
+                    tint: Palette.sleep,
+                    isOn: false,
+                    action: app.openStandBy
+                )
+                .help("A full-screen clock with your agents")
+                ControlTile(
+                    symbol: "powersleep",
+                    title: "Sleep",
+                    status: "Now",
+                    tint: Palette.sleep,
+                    isOn: false,
+                    action: app.sleepNow
+                )
+                .help(app.stayAwake.isOn ? "Turns Stay Awake off and puts the Mac to sleep" : "Puts the Mac to sleep")
+            }
+            .padding(.horizontal, NotchModel.List.rowInset - 4)
+        }
+    }
+
+    private static func status(of module: any PerchModule) -> String {
+        guard module.isOn else { return "Off" }
+        if let remaining = module.timer?.remaining(), module.timer?.isRunning == true {
+            return "On · \(DurationFormat.tight(remaining))"
+        }
+        return "On"
+    }
+}
+
+/// The main switch in one line: its symbol and name (click to turn it on or off), then the
+/// duration track on the right.
+struct PrimaryControlRow: View {
     let module: any PerchModule
 
     @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 12) {
             Button {
                 Task { await module.toggle(source: .ui) }
             } label: {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 14) {
-                        Image(systemName: module.symbol)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(module.isOn ? module.tint : Ink.tertiary)
-                            .frame(width: 22, height: 22)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text(module.title)
-                            .font(Ink.title)
-                            .foregroundStyle(Ink.primary)
-                        Spacer(minLength: 8)
-                    }
-                    Text(module.caption)
-                        .font(Ink.body)
-                        .foregroundStyle(Ink.secondary)
-                        .lineLimit(1)
-                        .padding(.leading, 36)
+                HStack(spacing: 10) {
+                    Image(systemName: module.symbol)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(module.isOn ? module.tint : Ink.tertiary)
+                        .frame(width: 22, height: 22)
+                        .contentTransition(.symbolEffect(.replace))
+                    Text(module.title)
+                        .font(.system(size: 14.5, weight: .medium))
+                        .foregroundStyle(isHovered ? Ink.primary : Color.white.opacity(0.9))
+                        .fixedSize()
                 }
+                .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
             .disabled(module.isBusy)
+            .help(module.caption)
             .accessibilityLabel(module.title)
             .accessibilityValue(module.isOn ? "On" : "Off")
 
+            Spacer(minLength: 8)
+
             if module.timer != nil {
-                DurationTrack(module: module)
-                    .padding(.leading, 36)
-                    .padding(.top, 12)
+                DurationTrack(module: module, height: 30)
+                    .frame(maxWidth: 296)
             }
         }
         .padding(.horizontal, NotchModel.List.rowInset)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(isHovered ? Ink.hover : .clear))
-        .onHover { isHovered = $0 }
         .animation(Motion.hover, value: isHovered)
         .animation(.easeInOut(duration: 0.2), value: module.isOn)
+    }
+}
+
+/// A Control Center–style tile: a round symbol (filled with the tint while on), a title and a
+/// short state. The whole tile is one button.
+struct ControlTile: View {
+    let symbol: String
+    let title: String
+    let status: String
+    let tint: Color
+    let isOn: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isOn ? Color.white : Color.white.opacity(0.85))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(isOn ? tint : Color.white.opacity(0.1)))
+                    .contentTransition(.symbolEffect(.replace))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Ink.primary)
+                    Text(status)
+                        .font(.system(size: 11))
+                        .foregroundStyle(isOn ? tint : Ink.secondary)
+                        .monospacedDigit()
+                }
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: NotchModel.List.tileHeight)
+            .background(shape.fill(isOn ? tint.opacity(0.16) : Color.white.opacity(isHovered ? 0.09 : 0.06)))
+            .overlay(shape.strokeBorder(isOn ? tint.opacity(0.35) : Color.white.opacity(0.05), lineWidth: 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: isOn)
+        .accessibilityLabel(title)
+        .accessibilityValue(status)
     }
 }
 
@@ -193,6 +311,7 @@ struct PrimaryModuleRow: View {
 /// it off. No thumb while the module is off.
 struct DurationTrack: View {
     let module: any PerchModule
+    var height: CGFloat = NotchModel.List.trackHeight
 
     @Namespace private var thumbSpace
 
@@ -212,7 +331,7 @@ struct DurationTrack: View {
             }
         }
         .padding(3)
-        .frame(height: NotchModel.List.trackHeight)
+        .frame(height: height)
         .background(Capsule().fill(Color.white.opacity(0.08)))
         .disabled(module.isBusy)
         .animation(Motion.selection, value: selection)
@@ -264,42 +383,7 @@ private struct DurationSegment: View {
     }
 }
 
-/// Another module, in one line: a dot in its color while on, and the title.
-struct CompactModuleRow: View {
-    let module: any PerchModule
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            Task { await module.toggle(source: .ui) }
-        } label: {
-            HStack(spacing: 14) {
-                Circle()
-                    .fill(module.isOn ? module.tint : Color.white.opacity(0.25))
-                    .frame(width: 8, height: 8)
-                    .frame(width: 22)
-                Text(module.title)
-                    .font(Ink.compactTitle)
-                    .foregroundStyle(Color.white.opacity(0.88))
-                Spacer(minLength: 8)
-            }
-            .padding(.horizontal, NotchModel.List.rowInset)
-            .frame(maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(isHovered ? Ink.hover : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(Motion.hover, value: isHovered)
-        .animation(.easeInOut(duration: 0.2), value: module.isOn)
-        .help(module.caption)
-        .accessibilityLabel(module.title)
-        .accessibilityValue(module.isOn ? "On" : "Off")
-    }
-}
-
-/// A one-line row that runs an action, styled like `CompactModuleRow`.
+/// A one-line row that runs an action, such as Settings.
 struct ActionRow: View {
     let symbol: String
     let title: String

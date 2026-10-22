@@ -22,6 +22,7 @@ struct NotchRootView: View {
             if let session = model.glanceSession {
                 AgentWings(session: session, others: model.otherActiveSessions, model: model)
                     .frame(size: model.bodySize(for: .badge))
+                    .id(session.id)
                     .transition(.opacity)
             } else if let module = model.badgeModule {
                 BadgeWings(module: module, model: model)
@@ -82,20 +83,12 @@ private struct NotchListContent: View {
                 SectionDivider()
             }
 
-            PrimaryModuleRow(module: app.primary)
-                .frame(height: Layout.primaryHeight, alignment: .top)
-
-            VStack(spacing: Layout.rowSpacing) {
-                ForEach(app.secondary, id: \.id) { module in
-                    CompactModuleRow(module: module)
-                        .frame(height: Layout.rowHeight)
-                }
-            }
-            .padding(.top, Layout.rowSpacing)
+            ControlsSection()
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Layout.panelInset)
+        .environment(\.agentListWidth, model.listWidth)
     }
 }
 
@@ -182,7 +175,7 @@ private struct AgentWings: View {
         HStack(spacing: 0) {
             HStack(spacing: 7) {
                 PulsingDot(tint: session.state.color, size: 6)
-                Text(session.project)
+                Text(model.displayName(of: session))
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Ink.primary)
                     .lineLimit(1)

@@ -95,6 +95,16 @@ final class StatusItemController: NSObject {
             menu.addItem(.separator())
         }
 
+        let standby = NSMenuItem(title: "StandBy", action: #selector(openStandBy), keyEquivalent: "")
+        standby.target = self
+        standby.image = NSImage(systemSymbolName: "moon.stars", accessibilityDescription: nil)
+        menu.addItem(standby)
+
+        let sleep = NSMenuItem(title: "Sleep Now", action: #selector(sleepNow), keyEquivalent: "")
+        sleep.target = self
+        sleep.image = NSImage(systemSymbolName: "powersleep", accessibilityDescription: nil)
+        menu.addItem(sleep)
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -127,6 +137,14 @@ final class StatusItemController: NSObject {
 
     @objc private func openSettings() {
         app.openSettings()
+    }
+
+    @objc private func openStandBy() {
+        app.openStandBy()
+    }
+
+    @objc private func sleepNow() {
+        app.sleepNow()
     }
 
     // MARK: Icon

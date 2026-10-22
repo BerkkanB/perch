@@ -48,7 +48,9 @@ final class NotchController {
             let target = model.targetPhase
             let badgeWidth = model.bodySize(for: .badge).width
             let openHeight = model.bodySize(for: .expanded).height
+            let busyAgents = app.agents.activeSessions.count
             DispatchQueue.main.async {
+                self.rotateGlance(busyAgents > 1)
                 if target == .badge, target == self.shownPhase, badgeWidth != self.shownBadgeWidth {
                     self.resizeBadge(from: self.shownBadgeWidth, to: badgeWidth)
                 }
@@ -58,6 +60,22 @@ final class NotchController {
                 self.shownBadgeWidth = badgeWidth
                 self.shownOpenHeight = openHeight
                 self.show(target)
+            }
+        }
+    }
+
+    private var glanceTimer: Timer?
+
+    /// While several agents are busy, the collapsed notch shows each in turn.
+    private func rotateGlance(_ on: Bool) {
+        guard on != (glanceTimer != nil) else { return }
+        glanceTimer?.invalidate()
+        glanceTimer = nil
+        guard on else { return }
+        glanceTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { self.model.glanceRotation += 1 }
             }
         }
     }

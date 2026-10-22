@@ -1,12 +1,14 @@
 import AppKit
 import Observation
+import OSLog
 
 /// Tracks coding agent sessions from the events `perch-hook` forwards, holds permission requests
 /// until they are answered in the notch, and keeps Claude's usage limits.
 @MainActor
 @Observable
 final class AgentCenter {
-    /// Waiting first, then working, then most recently active.
+    /// Waiting for you first, then the other active ones, then the rest; in start order within
+    /// each group, so rows don't jump around while several agents work.
     private(set) var sessions: [AgentSession] = []
     private(set) var usage: AgentUsage?
     private(set) var serverError: String?
@@ -16,8 +18,11 @@ final class AgentCenter {
     @ObservationIgnored private let prefs: Preferences
     @ObservationIgnored private let hud: HUDCenter
     @ObservationIgnored private var server: AgentSocketServer?
-    @ObservationIgnored private var replies: [UUID: AgentReply] = [:]
+    /// Permission requests kept open until they're answered, by approval id.
+    @ObservationIgnored private var held: [UUID: HeldRequest] = [:]
     @ObservationIgnored private var cleanupTimer: Timer?
+    /// Event names and session ids only (never prompts or commands): `log show --predicate 'subsystem == "com.berkkanbutun.perch"' --info`.
+    @ObservationIgnored private let log = Logger(subsystem: "com.berkkanbutun.perch", category: "agents")
 
     static var socketPath: String {
         ProcessInfo.processInfo.environment["PERCH_SOCKET"] ?? ClaudeCodeIntegration.perchDirectory.appendingPathComponent("agent.sock").path
@@ -64,26 +69,65 @@ final class AgentCenter {
     }
 
     func stop() {
-        for reply in replies.values { reply.send(nil) }
-        replies.removeAll()
+        for request in held.values { request.reply.send(nil) }
+        held.removeAll()
         server?.stop()
     }
 
     // MARK: Actions
 
-    /// Answers the waiting permission request.
+    /// Answers the waiting permission request. Denying Claude's questions skips them.
     func decide(_ sessionID: String, allow: Bool) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
               let approval = sessions[index].approval else { return }
-        let decision: [String: Any] = allow
-            ? ["behavior": "allow"]
-            : ["behavior": "deny", "message": "Denied from Perch."]
-        let output = ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]
-        replies.removeValue(forKey: approval.id)?.send(try? JSONSerialization.data(withJSONObject: output))
+        if let request = held.removeValue(forKey: approval.id) {
+            let message = approval.questions.isEmpty ? "Denied from Perch." : "The user skipped these questions in Perch."
+            // Allowing hands the input back unchanged: tools like ExitPlanMode don't run on a bare "allow".
+            request.reply.send(allow
+                ? Self.permissionReply(allow: true, updatedInput: request.input)
+                : Self.permissionReply(allow: false, message: message))
+        }
+        settle(index, activity: allow ? "Approved" : approval.questions.isEmpty ? "Denied" : "Skipped")
+    }
+
+    /// Answers Claude's questions: `selections` maps each question's text to the labels picked.
+    func answer(_ sessionID: String, selections: [String: Set<String>]) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
+              let approval = sessions[index].approval, !approval.questions.isEmpty else { return }
+        if let request = held.removeValue(forKey: approval.id) {
+            let input = Self.answeredInput(request.input, questions: approval.questions, selections: selections)
+            request.reply.send(Self.permissionReply(allow: true, updatedInput: input))
+        }
+        settle(index, activity: "Answered")
+    }
+
+    private func settle(_ index: Int, activity: String) {
         sessions[index].approval = nil
         sessions[index].state = .working
-        sessions[index].activity = allow ? "Approved" : "Denied"
+        sessions[index].activity = activity
         sort()
+    }
+
+    /// The hook's reply to a permission request.
+    nonisolated static func permissionReply(allow: Bool, updatedInput: [String: Any]? = nil, message: String? = nil) -> Data? {
+        var decision: [String: Any] = ["behavior": allow ? "allow" : "deny"]
+        if let updatedInput { decision["updatedInput"] = updatedInput }
+        if let message { decision["message"] = message }
+        let output = ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]
+        return try? JSONSerialization.data(withJSONObject: output, options: [.sortedKeys])
+    }
+
+    /// AskUserQuestion's input with `answers` added, as Claude Code expects: each question's text
+    /// maps to the picked labels in Claude's order, joined with ", " when there are several.
+    nonisolated static func answeredInput(_ input: [String: Any], questions: [AgentQuestion], selections: [String: Set<String>]) -> [String: Any] {
+        var answers: [String: String] = [:]
+        for question in questions {
+            let picked = question.options.map(\.label).filter { selections[question.question]?.contains($0) == true }
+            if !picked.isEmpty { answers[question.question] = picked.joined(separator: ", ") }
+        }
+        var updated = input
+        updated["answers"] = answers
+        return updated
     }
 
     /// Leaves the decision to the agent's own prompt in its terminal, and brings that forward.
@@ -133,6 +177,7 @@ final class AgentCenter {
             return
         }
         let id = "claude:\(rawID)"
+        log.info("\(name, privacy: .public) session \(rawID.prefix(8), privacy: .public)")
         let tool = event["tool_name"] as? String ?? "Tool"
         let input = event["tool_input"] as? [String: Any] ?? [:]
 
@@ -152,7 +197,7 @@ final class AgentCenter {
 
         // Any later event means a waiting request was settled elsewhere (in the terminal, say).
         if name != "PermissionRequest", name != "Notification", let approval = session.approval {
-            replies.removeValue(forKey: approval.id)?.send(nil)
+            held.removeValue(forKey: approval.id)?.reply.send(nil)
             session.approval = nil
         }
 
@@ -175,11 +220,11 @@ final class AgentCenter {
         case "PostToolUse", "PostToolUseFailure":
             session.state = .working
         case "PermissionRequest":
-            if let old = session.approval { replies.removeValue(forKey: old.id)?.send(nil) }
+            if let old = session.approval { held.removeValue(forKey: old.id)?.reply.send(nil) }
             if prefs.agentApprovalsInNotch {
-                let approval = PendingApproval(tool: tool, detail: ToolDescription.detail(tool: tool, input: input))
+                let approval = PendingApproval(tool: tool, input: input)
                 session.approval = approval
-                replies[approval.id] = reply
+                held[approval.id] = HeldRequest(reply: reply, input: input)
                 keepReplyOpen = true
             }
             session.state = .waiting
@@ -216,29 +261,58 @@ final class AgentCenter {
     private func clearApproval(of sessionID: String) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
               let approval = sessions[index].approval else { return }
-        replies.removeValue(forKey: approval.id)?.send(nil)
+        held.removeValue(forKey: approval.id)?.reply.send(nil)
         sessions[index].approval = nil
         sessions[index].state = .working
         sort()
     }
 
     private func sort() {
-        func rank(_ state: AgentSession.State) -> Int {
-            switch state {
-            case .waiting: 0
-            case .working: 1
-            case .done: 2
-            case .idle: 3
+        func rank(_ session: AgentSession) -> Int {
+            if session.approval != nil { return 0 }
+            switch session.state {
+            case .waiting, .working: return 1
+            case .done, .idle: return 2
             }
         }
         sessions.sort {
-            rank($0.state) != rank($1.state) ? rank($0.state) < rank($1.state) : $0.updatedAt > $1.updatedAt
+            rank($0) != rank($1) ? rank($0) < rank($1) : $0.startedAt < $1.startedAt
         }
+    }
+
+    /// Names to show: the project, plus a few words of the prompt when two sessions share one.
+    static func displayNames(for sessions: [AgentSession]) -> [String: String] {
+        let counts = Dictionary(grouping: sessions, by: \.project).mapValues(\.count)
+        var names: [String: String] = [:]
+        for session in sessions {
+            guard counts[session.project, default: 0] > 1 else {
+                names[session.id] = session.project
+                continue
+            }
+            let words = session.lastPrompt?.split(separator: " ").prefix(3).joined(separator: " ")
+                .trimmingCharacters(in: .punctuationCharacters.union(.whitespaces))
+            let tag = words.flatMap { $0.isEmpty ? nil : ToolDescription.firstLine($0, limit: 20) }
+                ?? session.terminal?.tty.map { ($0 as NSString).lastPathComponent }
+                ?? String(session.id.suffix(4))
+            names[session.id] = "\(session.project) · \(tag)"
+        }
+        return names
+    }
+
+    var displayNames: [String: String] {
+        Self.displayNames(for: sessions)
     }
 
     private func removeStaleSessions() {
         let cutoff = Date().addingTimeInterval(-8 * 60 * 60)
         sessions.removeAll { $0.approval == nil && $0.updatedAt < cutoff }
+    }
+
+    /// A permission request kept open until it's answered: where the answer goes, and the tool
+    /// input to send back with Claude's answers.
+    private struct HeldRequest {
+        let reply: AgentReply
+        let input: [String: Any]
     }
 
     #if DEBUG

@@ -58,6 +58,10 @@ final class NotchModel {
     /// Pins a phase, for screenshots and demos.
     var forcedPhase: Phase?
 
+    /// Advances every few seconds while several agents are busy, so the collapsed notch takes
+    /// turns showing each of them.
+    var glanceRotation = 0
+
     /// The content inside the shape. `nil` while the shape is moving between sizes.
     var contentPhase: Phase?
 
@@ -78,10 +82,19 @@ final class NotchModel {
         return .idle
     }
 
-    /// The agent the collapsed notch shows: the most important one working or waiting for you.
-    /// It takes the badge's place while there is one.
+    /// The agent the collapsed notch shows: one waiting for you if any, else each busy agent in
+    /// turn. It takes the badge's place while there is one.
     var glanceSession: AgentSession? {
-        app.prefs.notchShowsAgentActivity ? app.agents.activeSessions.first : nil
+        guard app.prefs.notchShowsAgentActivity else { return nil }
+        let active = app.agents.activeSessions
+        guard !active.isEmpty else { return nil }
+        if let waiting = active.first(where: { $0.state == .waiting }) { return waiting }
+        return active[glanceRotation % active.count]
+    }
+
+    /// The name to show for `session`, told apart from others in the same folder.
+    func displayName(of session: AgentSession) -> String {
+        app.agents.displayNames[session.id] ?? session.project
     }
 
     /// Other agents working or waiting, shown as "+N".
@@ -115,7 +128,7 @@ final class NotchModel {
     }
 
     static let hudWing: CGFloat = 124
-    static let expandedWidth: CGFloat = 500
+    nonisolated static let expandedWidth: CGFloat = 500
     static let shadowPadding: CGFloat = 26
 
     /// The open list's vertical rhythm, shared with `NotchListContent`.
@@ -124,26 +137,26 @@ final class NotchModel {
         static let statsHeight: CGFloat = 18
         static let statsGap: CGFloat = 10
         /// Title line, description, then the duration track.
-        static let primaryHeight: CGFloat = 106
+        /// The main switch in one line, then tiles for the others and StandBy.
+        static let primaryHeight: CGFloat = 44
+        static let controlsGap: CGFloat = 8
+        static let tileHeight: CGFloat = 50
+        static let tileSpacing: CGFloat = 8
+        static let tileColumns = 3
         static let trackHeight: CGFloat = 32
         static let rowHeight: CGFloat = 40
         static let rowSpacing: CGFloat = 2
-        static let bottom: CGFloat = 10
+        static let bottom: CGFloat = 14
         static let panelInset: CGFloat = 12
         static let rowInset: CGFloat = 14
 
-        // Coding agent sessions, above the switches.
-        static let approvalDetailHeight: CGFloat = 52
+        // Coding agent sessions, above the switches. The written-out session's height, with its
+        // approval or questions, is measured in AgentRows.swift.
         static let approvalButtonsHeight: CGFloat = 28
         static let moreRowHeight: CGFloat = 24
         static let maxCompactSessions = 3
         /// The line between the sessions and the switches, with its margins.
         static let sectionDivider: CGFloat = 13
-
-        static func sessionCardHeight(hasApproval: Bool) -> CGFloat {
-            let base: CGFloat = 82
-            return hasApproval ? base + 8 + approvalDetailHeight + 8 + approvalButtonsHeight : base
-        }
     }
 
     /// The black body for `phase`, not counting the small curves at the top corners.
@@ -159,7 +172,7 @@ final class NotchModel {
         case .hud:
             return CGSize(width: width + 2 * Self.hudWing, height: height)
         case .expanded:
-            return CGSize(width: max(Self.expandedWidth, width + 260), height: expandedHeight)
+            return CGSize(width: openWidth, height: expandedHeight)
         }
     }
 
@@ -179,11 +192,25 @@ final class NotchModel {
         return CGSize(width: open.width + 2 * radii.top + 2 * Self.shadowPadding, height: open.height + Self.shadowPadding)
     }
 
+    var openWidth: CGFloat {
+        max(Self.expandedWidth, geometry.notchWidth + 260)
+    }
+
+    /// The width of the rows inside the open notch.
+    var listWidth: CGFloat {
+        openWidth - 2 * List.panelInset
+    }
+
     var expandedHeight: CGFloat {
-        let rows = CGFloat(app.secondary.count)
-        return geometry.notchHeight + List.statsTop + List.statsHeight + List.statsGap
-            + sessionsHeight
-            + List.primaryHeight + rows * (List.rowHeight + List.rowSpacing) + List.bottom
+        geometry.notchHeight + List.statsTop + List.statsHeight + List.statsGap
+            + sessionsHeight + controlsHeight + List.bottom
+    }
+
+    /// The main switch's line plus the tiles (the other switches, StandBy and Sleep).
+    var controlsHeight: CGFloat {
+        let tiles = app.secondary.count + 2
+        let rows = CGFloat((tiles + List.tileColumns - 1) / List.tileColumns)
+        return List.primaryHeight + List.controlsGap + rows * List.tileHeight + (rows - 1) * List.tileSpacing
     }
 
     /// The agent sessions block, divider included; nothing when there are no sessions.
@@ -192,7 +219,7 @@ final class NotchModel {
         guard let first = sessions.first else { return 0 }
         let compact = min(sessions.count - 1, List.maxCompactSessions)
         let hidden = sessions.count - 1 - compact
-        var height = List.sessionCardHeight(hasApproval: first.approval != nil)
+        var height = List.sessionCardHeight(for: first, listWidth: listWidth)
         height += CGFloat(compact) * (List.rowSpacing + List.rowHeight)
         if hidden > 0 { height += List.rowSpacing + List.moreRowHeight }
         return height + List.sectionDivider

@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class AppModel {
     static let menuShortcutName = "open-menu"
+    static let standbyShortcutName = "standby"
 
     let prefs: Preferences
     let power = PowerMonitor()
@@ -21,6 +22,7 @@ final class AppModel {
     // Hooks the AppDelegate fills in, so views can reach windows they don't own.
     @ObservationIgnored var openSettings: () -> Void = {}
     @ObservationIgnored var toggleMenu: () -> Void = {}
+    @ObservationIgnored var openStandBy: () -> Void = {}
     @ObservationIgnored var closeTransientUI: () -> Void = {}
 
     init(defaults: UserDefaults = .standard) {
@@ -82,6 +84,27 @@ final class AppModel {
         }
         hotKeys.set(Self.menuShortcutName, combo: menuShortcut) { [weak self] in
             self?.toggleMenu()
+        }
+        hotKeys.set(Self.standbyShortcutName, combo: prefs.shortcut(for: Self.standbyShortcutName, fallback: nil)) { [weak self] in
+            self?.openStandBy()
+        }
+    }
+
+    // MARK: Sleep
+
+    /// Puts the Mac to sleep now, turning Stay Awake off first (it blocks every kind of sleep).
+    func sleepNow() {
+        closeTransientUI()
+        Task {
+            if stayAwake.isOn {
+                await stayAwake.setOn(false, source: .ui)
+                // Still on: the password prompt was cancelled, so don't sleep.
+                guard !stayAwake.isOn else { return }
+            }
+            let result = await Shell.run("/usr/bin/pmset", ["sleepnow"])
+            if !result.succeeded {
+                hud.show(HUDMessage(symbol: "exclamationmark.triangle.fill", title: "Sleep", value: "failed", tint: Palette.danger))
+            }
         }
     }
 

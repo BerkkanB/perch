@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
     private var notch: NotchController?
     private var settings: SettingsWindowController?
+    private var standby: StandByController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstance() {
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusItem = StatusItemController(app: model)
         let notch = NotchController(app: model)
         let settings = SettingsWindowController(app: model)
+        let standby = StandByController(app: model)
 
         model.openSettings = { [weak settings, weak notch, weak statusItem] in
             notch?.collapse()
@@ -24,6 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings?.show()
         }
         model.toggleMenu = { [weak statusItem] in statusItem?.togglePanel() }
+        model.openStandBy = { [weak standby, weak notch, weak statusItem] in
+            notch?.collapse()
+            statusItem?.closePanel()
+            standby?.show()
+        }
         model.closeTransientUI = { [weak notch, weak statusItem] in
             notch?.collapse()
             statusItem?.closePanel()
@@ -31,11 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         model.start()
         notch.start()
+        standby.start()
 
         self.model = model
         self.statusItem = statusItem
         self.notch = notch
         self.settings = settings
+        self.standby = standby
 
         if !model.prefs.hasLaunchedBefore {
             model.prefs.hasLaunchedBefore = true
@@ -44,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        DemoMode.apply(arguments: CommandLine.arguments, model: model, notch: notch, statusItem: statusItem, settings: settings)
+        DemoMode.apply(arguments: CommandLine.arguments, model: model, notch: notch, statusItem: statusItem, settings: settings, standby: standby)
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

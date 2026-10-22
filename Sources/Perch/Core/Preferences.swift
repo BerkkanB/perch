@@ -21,6 +21,13 @@ final class Preferences {
     var heatGuardEnabled: Bool { didSet { save(heatGuardEnabled, .heatGuardEnabled) } }
     var restoreSleepOnQuit: Bool { didSet { save(restoreSleepOnQuit, .restoreSleepOnQuit) } }
 
+    // StandBy
+    /// Minutes of inactivity before StandBy opens by itself; 0 means never.
+    var standbyIdleMinutes: Int { didSet { save(standbyIdleMinutes, .standbyIdleMinutes) } }
+    var standbyRequiresAuth: Bool { didSet { save(standbyRequiresAuth, .standbyRequiresAuth) } }
+    /// Minutes after which StandBy lets macOS's real lock take over; 0 means never.
+    var standbyLockAfterMinutes: Int { didSet { save(standbyLockAfterMinutes, .standbyLockAfterMinutes) } }
+
     // Coding agents
     var agentApprovalsInNotch: Bool { didSet { save(agentApprovalsInNotch, .agentApprovalsInNotch) } }
     var agentShowsFinished: Bool { didSet { save(agentShowsFinished, .agentShowsFinished) } }
@@ -55,6 +62,9 @@ final class Preferences {
             Key.heatGuardEnabled.rawValue: true,
             Key.restoreSleepOnQuit.rawValue: false,
             Key.agentApprovalsInNotch.rawValue: true,
+            Key.standbyIdleMinutes.rawValue: 0,
+            Key.standbyRequiresAuth.rawValue: true,
+            Key.standbyLockAfterMinutes.rawValue: 10,
             Key.agentShowsFinished.rawValue: true,
         ])
 
@@ -69,6 +79,9 @@ final class Preferences {
         heatGuardEnabled = defaults.bool(forKey: Key.heatGuardEnabled.rawValue)
         restoreSleepOnQuit = defaults.bool(forKey: Key.restoreSleepOnQuit.rawValue)
         agentApprovalsInNotch = defaults.bool(forKey: Key.agentApprovalsInNotch.rawValue)
+        standbyIdleMinutes = defaults.integer(forKey: Key.standbyIdleMinutes.rawValue)
+        standbyRequiresAuth = defaults.bool(forKey: Key.standbyRequiresAuth.rawValue)
+        standbyLockAfterMinutes = defaults.integer(forKey: Key.standbyLockAfterMinutes.rawValue)
         agentShowsFinished = defaults.bool(forKey: Key.agentShowsFinished.rawValue)
         hasLaunchedBefore = defaults.bool(forKey: Key.hasLaunchedBefore.rawValue)
         installedRuleDigest = defaults.string(forKey: Key.installedRuleDigest.rawValue)
@@ -96,6 +109,7 @@ final class Preferences {
         case menuBarShowsCountdown
         case batteryGuardEnabled, batteryGuardThreshold, heatGuardEnabled, restoreSleepOnQuit
         case agentApprovalsInNotch, agentShowsFinished
+        case standbyIdleMinutes, standbyRequiresAuth, standbyLockAfterMinutes
         case hasLaunchedBefore, installedRuleDigest, shortcuts
     }
 
