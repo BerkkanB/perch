@@ -86,6 +86,11 @@ panel, a shortcut (Settings → Shortcuts), or after the Mac is idle for a while
 StandBy). While it shows, the display stays on, so the screen saver and macOS's auto-lock don't
 start.
 
+It opens by fading the screen to black and letting the clock, then your agents, settle in out of
+a soft blur (slower when it opens on its own, like the display dimming). Closing zooms it toward
+you as the desktop comes back. When macOS locks or the Mac sleeps it closes at once, and with
+Reduce Motion on it only cross-fades.
+
 Closing it asks for Touch ID or your password by default, and until then app switching is
 blocked and agent approvals can't be answered from it. It's a privacy screen, not a replacement
 for the macOS lock: keep "Require password … Immediately" on in System Settings → Lock Screen.

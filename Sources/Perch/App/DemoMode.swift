@@ -184,9 +184,19 @@ private struct Snapshotter {
 
         // StandBy, built off screen so the snapshot doesn't take over the Mac.
         standby.show(onScreen: false)
-        await wait(1500)
+        for (index, delay) in [0, 150, 150, 150, 150, 200, 300].enumerated() {
+            await wait(delay)
+            capture(standby.contentWindow, as: "standby-open-\(index)", background: nil)
+        }
+        await wait(800)
         capture(standby.contentWindow, as: "standby", background: nil)
+        let standbyWindow = standby.contentWindow
         standby.hide()
+        for index in 0..<4 {
+            await wait(80)
+            capture(standbyWindow, as: "standby-close-\(index)", background: nil)
+        }
+        await wait(600)
         for id in ["claude:a", "claude:b", "claude:c"] { agents.dismiss(id) }
 
         // Settings tabs.

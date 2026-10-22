@@ -132,8 +132,13 @@ change is a short cross-fade.
   - the coding agent sessions (see below), then the switches together:
   - the main module in one line: symbol and name (click to toggle) with the duration track
     `∞ 15m 30m 1h 2h 4h` beside it, its thumb sliding to the choice,
-  - the other modules and StandBy as Control Center-style tiles, two per row, filled with the
-    module's color while on.
+  - the other modules, StandBy and Sleep Now as Control Center-style tiles, three per row,
+    filled with the module's color while on.
+- StandBy opens in steps: the windows fade to black (0.45 s, or 1.4 s when idle opens it), then
+  the clock scales in from 0.94 out of a 14 pt blur, the agents and readings rising in 0.1 s
+  apart (they rise rather than scale, since scaling a scroll view leaves it scrolled). Closing
+  fades and blurs the content while zooming it to 1.06, then the black lifts in 0.4 s. A lock
+  or sleep closes it without animation; Reduce Motion cross-fades.
 - Controls are SwiftUI rather than AppKit, because the notch panel never becomes key (it must
   not take your typing focus) and AppKit controls draw dimmed there.
 - Settings: a standard preferences window with toolbar tabs and grouped forms.

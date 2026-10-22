@@ -24,6 +24,8 @@ final class StandByController {
     private var authContext: LAContext?
     private var handoverTask: Task<Void, Never>?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    /// The content's entrance and exit, new for each time StandBy opens.
+    private var presentation = StandByPresentation()
     private(set) var isShown = false
 
     init(app: AppModel) {
@@ -37,33 +39,40 @@ final class StandByController {
             DispatchQueue.main.async { self.watchIdle(minutes: minutes) }
         }
 
-        // macOS's own lock (or sleep) replaces StandBy, so you only unlock once.
+        // macOS's own lock (or sleep) replaces StandBy, so you only unlock once. Nobody sees it
+        // close then, so it goes at once.
         let distributed = DistributedNotificationCenter.default()
         observers.append((distributed, distributed.addObserver(
             forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hide() }
+            MainActor.assumeIsolated { self?.hide(animated: false) }
         }))
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append((workspace, workspace.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hide() }
+            MainActor.assumeIsolated { self?.hide(animated: false) }
         }))
     }
 
     // MARK: Showing
 
-    /// `onScreen: false` builds the windows far off screen without taking over the Mac, for snapshots.
-    func show(onScreen: Bool = true) {
+    /// The screen fades to black and the content settles in; slower when the Mac was idle, like
+    /// the display dimming. `onScreen: false` builds the windows far off screen without taking
+    /// over the Mac, for snapshots.
+    func show(onScreen: Bool = true, fromIdle: Bool = false) {
         guard !isShown else { return }
         isShown = true
         let requiresAuth = app.prefs.standbyRequiresAuth
         let main = Self.contentScreen
+        let presentation = StandByPresentation()
+        presentation.delay = fromIdle ? 0.6 : 0.15
+        self.presentation = presentation
 
         for screen in NSScreen.screens {
             let window = StandByWindow(screen: screen)
             let view = StandByView(
+                presentation: presentation,
                 showsContent: screen == main,
                 requiresAuth: requiresAuth,
                 onDismiss: { [weak self] in self?.requestDismiss() }
@@ -77,6 +86,14 @@ final class StandByController {
             window.orderFrontRegardless()
             windows.append(window)
         }
+
+        // Once the content has been drawn in its starting state, it can animate in.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard let self, self.isShown, self.presentation === presentation else { return }
+            presentation.phase = .shown
+        }
+
         guard onScreen else {
             windows.forEach { $0.alphaValue = 1 }
             return
@@ -90,8 +107,8 @@ final class StandByController {
         NSCursor.setHiddenUntilMouseMoves(true)
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.5
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.duration = Motion.reduceMotion ? 0.2 : fromIdle ? Motion.standbyIdleFadeIn : Motion.standbyFadeIn
+            context.timingFunction = CAMediaTimingFunction(name: fromIdle ? .easeInEaseOut : .easeOut)
             windows.forEach { $0.animator().alphaValue = 1 }
         }
 
@@ -159,7 +176,9 @@ final class StandByController {
         }
     }
 
-    func hide() {
+    /// The content zooms toward you and fades, then the black lifts. `animated: false` closes at
+    /// once, for when macOS locks or the Mac sleeps.
+    func hide(animated: Bool = true) {
         guard isShown else { return }
         isShown = false
         handoverTask?.cancel()
@@ -169,15 +188,30 @@ final class StandByController {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
         releaseDisplayAssertion()
-        NSApp.presentationOptions = []
 
         let closing = windows
         windows = []
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
-            closing.forEach { $0.animator().alphaValue = 0 }
-        } completionHandler: {
-            MainActor.assumeIsolated { closing.forEach { $0.orderOut(nil) } }
+        // Clicks go through to the desktop while it fades.
+        closing.forEach { $0.ignoresMouseEvents = true }
+        guard animated else {
+            NSApp.presentationOptions = []
+            closing.forEach { $0.orderOut(nil) }
+            return
+        }
+
+        presentation.phase = .leaving
+        Task { [weak self] in
+            // The content starts going first, then the black lifts with the Dock and menu bar
+            // coming back underneath it.
+            try? await Task.sleep(for: .milliseconds(Motion.reduceMotion ? 0 : 100))
+            if self?.isShown != true { NSApp.presentationOptions = [] }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Motion.reduceMotion ? 0.2 : Motion.standbyFadeOut
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                closing.forEach { $0.animator().alphaValue = 0 }
+            } completionHandler: {
+                MainActor.assumeIsolated { closing.forEach { $0.orderOut(nil) } }
+            }
         }
     }
 
@@ -200,7 +234,7 @@ final class StandByController {
         idleTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.isShown, !Self.isScreenLocked, !self.app.power.isLidClosed else { return }
-                if Self.idleSeconds >= TimeInterval(minutes * 60) { self.show() }
+                if Self.idleSeconds >= TimeInterval(minutes * 60) { self.show(fromIdle: true) }
             }
         }
     }

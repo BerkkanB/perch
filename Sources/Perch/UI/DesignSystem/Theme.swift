@@ -54,6 +54,18 @@ enum Motion {
     /// Replaces every animation above while Reduce Motion is on: cross-fades only.
     static let reduced = Animation.easeInOut(duration: 0.2)
 
+    // StandBy: the screen goes black, then the clock settles in from a little small and blurred,
+    // with the agents and readings a beat apart. Closing zooms it toward you as it fades, like
+    // unlocking, while the black lifts.
+    static let standbyIn = Animation.smooth(duration: 0.8)
+    static let standbyOut = Animation.easeIn(duration: 0.28)
+    /// Between one part of StandBy coming in and the next.
+    static let standbyStagger = 0.1
+    /// The black fading in: quick when you open StandBy, slow like dimming when the Mac is idle.
+    static let standbyFadeIn: TimeInterval = 0.45
+    static let standbyIdleFadeIn: TimeInterval = 1.4
+    static let standbyFadeOut: TimeInterval = 0.4
+
     /// How long the pointer rests on the notch before it opens (0.3–0.5 s is the usual range).
     static let hoverIntent: Duration = .milliseconds(300)
     /// How long the pointer can be outside before the open notch closes.
