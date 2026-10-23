@@ -7,6 +7,10 @@ The first switch, **Stay Awake**, replaces typing `sudo pmset -a disablesleep 1`
 Your Mac keeps running even with the lid closed. A second switch, **Screen On**, stops the
 display from dimming (like `caffeinate -d`).
 
+> **The name will change.** "Perch" is a working name: a [notch app on the Mac App Store](https://apps.apple.com/app/perch/id6742724228)
+> and a [Claude Code menu bar app on GitHub](https://github.com/ik-labs/perch) already use it. The app, its
+> bundle ID and its files (`~/.perch`, `perch-hook`, `/etc/sudoers.d/perch`) will be renamed with it.
+
 <p align="center">
   <img src="docs/images/notch-agents.png" width="572" alt="Perch open under the notch: three Claude Code sessions, Claude's usage limits, and the Stay Awake, Screen On, StandBy and Sleep switches">
 </p>
