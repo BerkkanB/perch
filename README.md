@@ -7,13 +7,25 @@ The first switch, **Stay Awake**, replaces typing `sudo pmset -a disablesleep 1`
 Your Mac keeps running even with the lid closed. A second switch, **Screen On**, stops the
 display from dimming (like `caffeinate -d`).
 
+<p align="center">
+  <img src="docs/images/notch-agents.png" width="572" alt="Perch open under the notch: three Claude Code sessions, Claude's usage limits, and the Stay Awake, Screen On, StandBy and Sleep switches">
+</p>
+
 ## Install
 
-Requires macOS 14 or later and Xcode (or the Command Line Tools) for `swift`.
+There is no prebuilt download yet; Perch is built from source on your Mac. You need:
+
+- macOS 14 (Sonoma) or later
+- Xcode 15.3 or later, or just the Command Line Tools (`xcode-select --install`).
+  Running the tests (`make test`) needs the full Xcode.
 
 ```bash
+git clone https://github.com/BerkkanB/perch.git
+cd perch
 make install      # builds Perch.app, copies it to /Applications and opens it
 ```
+
+The first build takes about a minute. To update, run `git pull` and `make install` again.
 
 Other targets: `make run` (build and run from `./build`), `make test`, `make icon`, `make clean`.
 
@@ -42,6 +54,10 @@ on every change.
 
 The duration track (`∞ 15m 30m 1h 2h 4h`) turns Stay Awake on for that long; ∞ means until you turn it off.
 
+<p align="center">
+  <img src="docs/images/notch-stay-awake.png" width="572" alt="Stay Awake on for one hour, with the awake time, battery and temperature above it">
+</p>
+
 ### Safety
 
 A closed MacBook that never sleeps can overheat in a bag, so Stay Awake also:
@@ -69,6 +85,12 @@ Perch can follow your Claude Code sessions in the notch, like the Dynamic Island
 - **Usage**: the top line shows Claude's 5-hour and weekly limits: `5h 11% 4h1m | 7d 2% 6h1m`.
 - A short message when a session finishes.
 
+<p align="center">
+  <img src="docs/images/notch-approval.png" width="380" alt="A Bash command waiting for approval in the notch, with Allow and Deny">
+  &nbsp;
+  <img src="docs/images/notch-question.png" width="380" alt="Two of Claude's questions in the notch, one with radio buttons and one with checkboxes">
+</p>
+
 Turn it on in **Settings → Agents → Connect**. That adds hooks and a status line to
 `~/.claude/settings.json` (your previous file is kept in `~/.perch/backups`, and any status line
 you had keeps working). Sessions started after connecting show up. **Disconnect** removes only
@@ -85,6 +107,10 @@ A full-screen status screen, like StandBy on iPhone: a large clock and the date,
 panel, a shortcut (Settings → Shortcuts), or after the Mac is idle for a while (Settings →
 StandBy). While it shows, the display stays on, so the screen saver and macOS's auto-lock don't
 start.
+
+<p align="center">
+  <img src="docs/images/standby.png" alt="StandBy: a large clock and the date, Claude's usage and battery, and the coding agents on the right">
+</p>
 
 It opens by fading the screen to black and letting the clock, then your agents, settle in out of
 a soft blur (slower when it opens on its own, like the display dimming). Closing zooms it toward
@@ -145,6 +171,7 @@ Sources/Perch/
   UI/         DesignSystem, MenuBar (status item + glass panel), Notch (canvas + hot zone), Settings
 scripts/      build-app.sh (bundle + ad-hoc signing), make-icon.sh
 Tests/        pmset parsing, sudoers rule, formatting, timers
+docs/         PLAN.md, README screenshots
 ```
 
 ### Debug helpers
@@ -155,6 +182,9 @@ swift build
 .build/debug/Perch --demo-notch expanded         # pin the notch open (idle|badge|hud|expanded)
 .build/debug/Perch --demo-menu                   # open the menu bar panel
 ```
+
+The screenshots in this README come from `--snapshot`, which fills in made-up agent sessions
+(add `-AppleLanguages '(en)' -AppleLocale en_US` for an English date in StandBy).
 
 ## Uninstall
 
