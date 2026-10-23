@@ -62,9 +62,7 @@ struct AgentSessionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 14) {
-                Image(systemName: "sparkle")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(session.state.color)
+                AgentStatusMark(session: session, size: .card)
                     .frame(width: 22, height: 22)
                 Text(name)
                     .font(Ink.title)
@@ -106,7 +104,45 @@ struct AgentSessionCard: View {
     }
 }
 
-/// One line per other session: a dot in its state color, the name, what it's doing now, age.
+/// What a session is up to, at a glance: the dot grid while it works, otherwise its mark in its
+/// state color (a pulsing dot beside the camera, the sparkle on the card, a dot in a row).
+struct AgentStatusMark: View {
+    enum Size {
+        case notch, card, row
+    }
+
+    let session: AgentSession
+    let size: Size
+
+    var body: some View {
+        Group {
+            if session.state == .working {
+                switch size {
+                case .notch: DotMatrix(tint: session.state.color, dot: 2.5, gap: 1.25)
+                case .card: DotMatrix(tint: session.state.color, dot: 4, gap: 2)
+                case .row: DotMatrix(tint: session.state.color, dot: 2.5, gap: 1.25)
+                }
+            } else {
+                switch size {
+                case .notch:
+                    PulsingDot(tint: session.state.color, size: 6)
+                case .card:
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(session.state.color)
+                case .row:
+                    Circle()
+                        .fill(session.state.color)
+                        .frame(width: 8, height: 8)
+                }
+            }
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.6)))
+        .animation(.smooth(duration: 0.3), value: session.state == .working)
+    }
+}
+
+/// One line per other session: its status mark, the name, what it's doing now, age.
 struct AgentSessionRow: View {
     @Environment(AppModel.self) private var app
     @Environment(\.agentsInteractive) private var isInteractive
@@ -117,9 +153,7 @@ struct AgentSessionRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Circle()
-                .fill(session.state.color)
-                .frame(width: 8, height: 8)
+            AgentStatusMark(session: session, size: .row)
                 .frame(width: 22)
             Text(name)
                 .font(Ink.compactTitle)
@@ -164,8 +198,10 @@ struct GlanceLabel: View {
     var body: some View {
         let glance = session.badgeGlance
         HStack(spacing: 5) {
-            Image(systemName: glance.symbol)
-                .font(.system(size: 10.5, weight: .semibold))
+            if let symbol = glance.symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 10.5, weight: .semibold))
+            }
             Text(glance.text)
                 .font(Ink.body)
                 .lineLimit(1)

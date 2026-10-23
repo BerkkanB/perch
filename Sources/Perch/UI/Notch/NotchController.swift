@@ -47,13 +47,23 @@ final class NotchController {
             guard let self else { return }
             let target = model.targetPhase
             let badgeWidth = model.bodySize(for: .badge).width
+            let hudWidth = model.bodySize(for: .hud).width
             let openHeight = model.bodySize(for: .expanded).height
             let busyAgents = app.agents.activeSessions.count
+            let doneMessage = app.hud.current.flatMap { $0.isDone ? $0.id : nil }
             DispatchQueue.main.async {
                 self.rotateGlance(busyAgents > 1)
                 if target == .badge, target == self.shownPhase, badgeWidth != self.shownBadgeWidth {
-                    self.resizeBadge(from: self.shownBadgeWidth, to: badgeWidth)
+                    self.resizeWings(from: self.shownBadgeWidth, to: badgeWidth, phase: .badge)
                 }
+                if target == .hud, target == self.shownPhase, hudWidth != self.shownHUDWidth {
+                    self.resizeWings(from: self.shownHUDWidth, to: hudWidth, phase: .hud)
+                }
+                if target == .hud, let doneMessage, doneMessage != self.glowedMessage {
+                    self.glowedMessage = doneMessage
+                    self.glowWhenOut()
+                }
+                self.shownHUDWidth = hudWidth
                 if openHeight != self.shownOpenHeight {
                     self.resizeOpen(from: self.shownOpenHeight, to: openHeight)
                 }
@@ -81,6 +91,9 @@ final class NotchController {
     }
 
     private var shownBadgeWidth: CGFloat = 0
+    private var shownHUDWidth: CGFloat = 0
+    /// The done message the glow last played for, so it plays once per message.
+    private var glowedMessage: UUID?
     private var shownOpenHeight: CGFloat = 0
     private var canvasShrinkTask: Task<Void, Never>?
 
@@ -104,11 +117,20 @@ final class NotchController {
         }
     }
 
-    /// A timer started or stopped, or the heat level changed, while the badge is showing:
-    /// widen or narrow both sides together.
-    private func resizeBadge(from old: CGFloat, to new: CGFloat) {
+    /// A timer started or stopped, the heat level changed, or a new HUD needs other room, while
+    /// the wings are showing: widen or narrow both sides together.
+    private func resizeWings(from old: CGFloat, to new: CGFloat, phase: NotchModel.Phase) {
         canvasView?.setShape(width: new, spring: new > old ? Motion.wingsOut : Motion.wingsIn)
-        updateMouseHandling(for: .badge)
+        updateMouseHandling(for: phase)
+    }
+
+    /// A soft green glow around the island once the done message's wings are out.
+    private func glowWhenOut() {
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(160))
+            guard let self, self.shownPhase == .hud else { return }
+            self.canvasView?.glow(color: NSColor(Palette.good))
+        }
     }
 
     /// The panel that draws the notch, for snapshots.
@@ -205,8 +227,12 @@ final class NotchController {
             )
             guard target != .idle, await pause(150) else { return }
         } else {
-            // Between the small states only the wings move.
+            // Between the small states only the wings move. Shrinking, the content goes first, so
+            // the wings never cut through text that is still fading.
             let growing = size.width > shape.bodyWidth
+            if !growing, !Motion.reduceMotion {
+                guard await pause(110) else { return }
+            }
             shape.setShape(
                 width: size.width, height: size.height,
                 topRadius: radii.top, bottomRadius: radii.bottom,

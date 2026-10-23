@@ -26,6 +26,8 @@ struct AgentSession: Identifiable, Equatable {
     var state: State
     var startedAt: Date
     var updatedAt: Date
+    /// When you sent the prompt it's working on, for "Done 4m".
+    var turnStartedAt: Date?
     var terminal: TerminalInfo?
     var approval: PendingApproval?
 
@@ -41,7 +43,7 @@ struct AgentSession: Identifiable, Equatable {
         case .waiting: AgentGlance(symbol: "hand.raised.fill", text: "needs you")
         case .done: AgentGlance(symbol: "checkmark", text: "done")
         case .idle: AgentGlance(symbol: "pause.fill", text: "idle")
-        case .working: glance ?? AgentGlance(symbol: "ellipsis", text: "working")
+        case .working: glance ?? AgentGlance(symbol: nil, text: "working")
         }
     }
 
@@ -71,9 +73,10 @@ enum AgentKind: String, Equatable {
     }
 }
 
-/// A very short "what": a symbol and a file name, command or word.
+/// A very short "what": a symbol and a file name, command or word. No symbol for thinking:
+/// the dot grid beside it already says it's busy.
 struct AgentGlance: Equatable {
-    var symbol: String
+    var symbol: String?
     var text: String
 }
 

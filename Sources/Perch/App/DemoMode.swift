@@ -73,6 +73,27 @@ private struct Snapshotter {
             capture(notch.canvasWindow, as: "notch-\(name)", background: .menuBar)
         }
 
+        // An agent finishing: the tick pops in, draws itself and rings out, then "done" follows.
+        notch.model.forcedPhase = .idle
+        await wait(900)
+        model.hud.show(.done("macos-sleep-cancel", after: 11), for: 3600)
+        notch.model.forcedPhase = .hud
+        await wait(120)
+        for index in 0..<10 {
+            capture(notch.canvasWindow, as: "done-\(index)", background: .menuBar)
+            await wait(90)
+        }
+        await wait(900)
+        capture(notch.canvasWindow, as: "notch-done", background: .menuBar)
+        notch.model.forcedPhase = .idle
+        for index in 0..<4 {
+            await wait(60)
+            capture(notch.canvasWindow, as: "done-out-\(index)", background: .menuBar)
+        }
+        model.hud.dismiss()
+        notch.model.forcedPhase = .expanded
+        await wait(900)
+
         // A secondary module switched on, to check the "on" styling.
         if let other = model.secondary.first {
             await other.setOn(true, source: .ui)
@@ -136,6 +157,13 @@ private struct Snapshotter {
         notch.model.forcedPhase = .badge
         await wait(900)
         capture(notch.canvasWindow, as: "glance-working", background: .menuBar)
+        // Thinking: the dot grid steps while the agent has nothing to show yet.
+        agents.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "a", "prompt": "fix the auth bug in middleware"])
+        for index in 0..<6 {
+            await wait(180)
+            capture(notch.canvasWindow, as: "glance-thinking-\(index)", background: .menuBar)
+        }
+        agents.simulate(["hook_event_name": "PreToolUse", "session_id": "a", "tool_name": "Write", "tool_input": ["file_path": "/code/auth-service/middleware.ts"]])
         notch.model.forcedPhase = .expanded
         await wait(900)
         capture(notch.canvasWindow, as: "notch-agents", background: .menuBar)

@@ -211,8 +211,9 @@ final class AgentCenter {
                 session.lastPrompt = ToolDescription.firstLine(prompt, limit: 120)
             }
             session.state = .working
+            session.turnStartedAt = .now
             session.activity = "Thinking…"
-            session.glance = AgentGlance(symbol: "ellipsis", text: "thinking")
+            session.glance = AgentGlance(symbol: nil, text: "thinking")
         case "PreToolUse":
             session.state = .working
             session.activity = ToolDescription.activity(tool: tool, input: input)
@@ -240,7 +241,8 @@ final class AgentCenter {
             session.activity = nil
             session.glance = nil
             if prefs.agentShowsFinished, prefs.notchShowsHUD {
-                hud.show(HUDMessage(symbol: "checkmark.circle.fill", title: session.project, value: "done", tint: Palette.good))
+                let elapsed = session.turnStartedAt.map { Date.now.timeIntervalSince($0) }
+                hud.show(.done(session.project, after: elapsed), for: HUDMessage.doneSeconds)
             }
         case "StopFailure":
             session.state = .idle

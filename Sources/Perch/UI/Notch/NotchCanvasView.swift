@@ -21,6 +21,8 @@ final class NotchCanvasView: NSView {
     private let leftFlare = CAShapeLayer()
     private let rightFlare = CAShapeLayer()
     private let contentMask = CALayer()
+    /// Casts a colored glow around the shape now and then; itself invisible.
+    private let glowLayer = CALayer()
 
     /// Flares are drawn at this radius and scaled to the current one.
     private static let flareReference: CGFloat = 12
@@ -50,6 +52,11 @@ final class NotchCanvasView: NSView {
             layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             layer.cornerCurve = .continuous
         }
+        glowLayer.anchorPoint = CGPoint(x: 0.5, y: 1)
+        glowLayer.shadowOffset = .zero
+        glowLayer.shadowRadius = 12
+        glowLayer.shadowOpacity = 0
+
         body.shadowColor = NSColor.black.cgColor
         body.shadowRadius = 18
         body.shadowOffset = CGSize(width: 0, height: -8)
@@ -80,6 +87,7 @@ final class NotchCanvasView: NSView {
             flare.bounds = CGRect(x: 0, y: 0, width: r, height: r)
         }
 
+        shapeRoot.addSublayer(glowLayer)
         shapeRoot.addSublayer(body)
         shapeRoot.addSublayer(leftFlare)
         shapeRoot.addSublayer(rightFlare)
@@ -96,6 +104,7 @@ final class NotchCanvasView: NSView {
             let top = CGPoint(x: bounds.midX, y: bounds.maxY)
             body.position = top
             contentMask.position = top
+            glowLayer.position = top
             leftFlare.position = CGPoint(x: top.x - bodyWidth / 2, y: top.y)
             rightFlare.position = CGPoint(x: top.x + bodyWidth / 2, y: top.y)
         }
@@ -137,6 +146,27 @@ final class NotchCanvasView: NSView {
                 animate(flare, "transform.scale", to: scale, spring: spring)
             }
         }
+    }
+
+    /// Lets a soft light in `color` bloom around the shape and fade, once: the shadow of an
+    /// invisible copy of the shape's final outline, blurred by the window server.
+    func glow(color: NSColor) {
+        withoutActions {
+            glowLayer.bounds = CGRect(x: 0, y: 0, width: bodyWidth, height: bodyHeight)
+            let radius = min(body.cornerRadius, bodyHeight / 2)
+            glowLayer.shadowPath = CGPath(roundedRect: glowLayer.bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
+            glowLayer.shadowColor = color.cgColor
+        }
+        let bloom = CAKeyframeAnimation(keyPath: "shadowOpacity")
+        bloom.values = [0, 0.5, 0.28, 0]
+        bloom.keyTimes = [0, 0.22, 0.55, 1]
+        bloom.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+            CAMediaTimingFunction(name: .easeIn),
+        ]
+        bloom.duration = 2.0
+        glowLayer.add(bloom, forKey: "glow")
     }
 
     /// Fades the drop shadow, built from the body's final outline so it costs one cheap pass.

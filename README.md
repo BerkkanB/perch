@@ -78,8 +78,9 @@ Changes made in the Terminal (`sudo pmset -a disablesleep …`) show up in Perch
 Perch can follow your Claude Code sessions in the notch, like the Dynamic Island:
 
 - **Sessions**: the most important one written out (project, your last prompt, what it's doing
-  now in blue), the others one line each with a dot: blue working, orange needs you, green done.
-  Click one to bring its terminal forward.
+  now in blue), the others one line each with a dot: orange needs you, green done. While a
+  session thinks or works, its dot becomes a small 3×3 grid with a band of light stepping
+  through it, beside the camera too. Click one to bring its terminal forward.
 - **Approvals**: when Claude Code asks for permission, the notch opens with the whole command
   (long ones scroll) and **Allow** / **Deny**. "Answer in Terminal" (or ignoring it) leaves the
   choice to Claude Code's own prompt.
@@ -87,7 +88,9 @@ Perch can follow your Claude Code sessions in the notch, like the Dynamic Island
   each question with its options, as radio buttons or checkboxes when you can pick several, and
   **Submit** sends your picks back. To type an answer of your own, use "Answer in Terminal".
 - **Usage**: the top line shows Claude's 5-hour and weekly limits: `5h 11% 4h1m | 7d 2% 6h1m`.
-- A short message when a session finishes.
+- A message beside the camera for 3.5 s when a session finishes: "✓ my-project ··· Done 4m",
+  with how long the turn took. The tick pops in and draws itself, the name and "Done" slide out
+  from the camera, and a soft green glow blooms around the notch once.
 
 <p align="center">
   <img src="docs/images/notch-approval.png" width="380" alt="A Bash command waiting for approval in the notch, with Allow and Deny">

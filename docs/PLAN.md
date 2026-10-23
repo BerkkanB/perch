@@ -108,7 +108,7 @@ Black, like the hardware notch it grows out of.
 | --- | --- | --- |
 | idle | nothing on | hidden inside the hardware notch |
 | expanded | hover (0.3 s) or click | a black list: stats line, the main module written out, a line per other module |
-| HUD | changed by shortcut or automation | wings beside the camera for 1.5 s: "☀ Stay Awake ··· on · 1h" |
+| HUD | changed by shortcut or automation, or an agent finished | wings beside the camera for 1.5 s: "☀ Stay Awake ··· on · 1h"; 3.5 s for "✓ auth-service ··· Done 4m" (the turn's length), in wings sized to the name (up to 190 pt). Tick, glow and check draw are Core Animation; the text slides out from the camera and draws back in before the wings retract |
 | badge | a module is on | the notch a little wider, the same on both sides: the module's symbol (and a thermometer when the Mac runs hot) left of the camera, the time left on the right when a timer is set. Can be turned off in Settings; nothing ever shows below the notch |
 
 The notch is drawn in a **fixed-size canvas** panel centred on the camera. It never moves or
@@ -164,6 +164,10 @@ event plus terminal details (`__CFBundleIdentifier`, `TERM_PROGRAM`, tty, tmux p
   (question text → chosen labels, joined with ", "), as in the hooks reference. Skip denies.
 - The card's height is measured from its text at the list's width (notch, menu and StandBy each
   pass theirs), so the notch opens to fit; commands over 220 pt and questions over 360 pt scroll.
+- Working indicator: a 3×3 dot grid after assistant-ui's GenerationLoader (dot i lit when
+  (2i + step) mod 9 < 3, a new step every 0.36 s with a 0.3 s fade). Each dot is one repeating
+  Core Animation keyframe track, phased off the media clock so every grid steps together and
+  the app stays idle while agents work.
 - Usage: the status line command forwards Claude Code's `rate_limits.five_hour` / `seven_day` to
   Perch and prints a short line (or runs the status line the user had before).
 - Connect / Disconnect edit `~/.claude/settings.json` with pure merge functions (tested): only

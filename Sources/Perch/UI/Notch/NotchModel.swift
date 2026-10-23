@@ -127,7 +127,45 @@ final class NotchModel {
         return isRunningHot ? 50 : 32
     }
 
-    static let hudWing: CGFloat = 124
+    /// How far a HUD extends on each side of the camera.
+    static let baseHUDWing: CGFloat = 124
+
+    /// A HUD's wings: the usual width, or for a finished agent as wide as its name needs (both
+    /// sides match), up to `Done.maxWing`.
+    var hudWing: CGFloat {
+        guard let message = app.hud.current, message.isDone else { return Self.baseHUDWing }
+        return Self.doneWing(for: message)
+    }
+
+    /// The finished-agent HUD's sizes, shared with `DoneWings`.
+    enum Done {
+        static let tickSize: CGFloat = 18
+        static let tickGap: CGFloat = 8
+        static let titleSize: CGFloat = 13.5
+        static let valueSize: CGFloat = 13
+        static let valueGap: CGFloat = 5
+        static let edgePadding: CGFloat = 14
+        /// Kept clear beside the camera.
+        static let cameraGap: CGFloat = 8
+        static let maxWing: CGFloat = 190
+    }
+
+    static func doneWing(for message: HUDMessage) -> CGFloat {
+        func width(_ text: String, _ font: NSFont) -> CGFloat {
+            (text as NSString).size(withAttributes: [.font: font]).width
+        }
+        func rounded(_ weight: NSFont.Weight) -> NSFont {
+            let font = NSFont.systemFont(ofSize: Done.valueSize, weight: weight)
+            return font.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: Done.valueSize) } ?? font
+        }
+        let title = NSFont.systemFont(ofSize: Done.titleSize, weight: .semibold)
+        let left = Done.edgePadding + Done.tickSize + Done.tickGap + width(message.title, title) + Done.cameraGap
+        var right = Done.edgePadding + width(message.value, rounded(.semibold)) + Done.cameraGap
+        if let detail = message.detail {
+            right += Done.valueGap + width(detail, rounded(.regular))
+        }
+        return min(max(baseHUDWing, ceil(max(left, right))), Done.maxWing)
+    }
     nonisolated static let expandedWidth: CGFloat = 500
     static let shadowPadding: CGFloat = 26
 
@@ -170,7 +208,7 @@ final class NotchModel {
         case .badge:
             return CGSize(width: width + 2 * badgeWing, height: height)
         case .hud:
-            return CGSize(width: width + 2 * Self.hudWing, height: height)
+            return CGSize(width: width + 2 * hudWing, height: height)
         case .expanded:
             return CGSize(width: openWidth, height: expandedHeight)
         }
@@ -189,7 +227,10 @@ final class NotchModel {
     var canvasSize: CGSize {
         let open = bodySize(for: .expanded)
         let radii = radii(for: .expanded)
-        return CGSize(width: open.width + 2 * radii.top + 2 * Self.shadowPadding, height: open.height + Self.shadowPadding)
+        // Also room for the widest done message, and the glow around it.
+        let widestHUD = geometry.notchWidth + 2 * Done.maxWing + 2 * self.radii(for: .hud).top
+        let width = max(open.width + 2 * radii.top, widestHUD)
+        return CGSize(width: width + 2 * Self.shadowPadding, height: open.height + Self.shadowPadding)
     }
 
     var openWidth: CGFloat {

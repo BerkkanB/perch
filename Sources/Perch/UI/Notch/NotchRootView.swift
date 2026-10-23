@@ -30,7 +30,17 @@ struct NotchRootView: View {
                     .transition(.opacity)
             }
         case .hud?:
-            if let message = app.hud.current {
+            if let message = app.hud.current, message.isDone {
+                DoneWings(message: message, notchWidth: model.geometry.notchWidth, wing: model.hudWing)
+                    .frame(size: model.bodySize(for: .hud))
+                    .id(message.id)
+                    .transition(Motion.reduceMotion ? .opacity : .asymmetric(
+                        insertion: .opacity,
+                        removal: .opacity
+                            .combined(with: .scale(scale: 0.82, anchor: .top))
+                            .combined(with: .modifier(active: Blurred(radius: 5), identity: Blurred(radius: 0)))
+                    ))
+            } else if let message = app.hud.current {
                 HUDWings(message: message, notchWidth: model.geometry.notchWidth)
                     .frame(size: model.bodySize(for: .hud))
                     .id(message.id)
@@ -174,7 +184,7 @@ private struct AgentWings: View {
 
         HStack(spacing: 0) {
             HStack(spacing: 7) {
-                PulsingDot(tint: session.state.color, size: 6)
+                AgentStatusMark(session: session, size: .notch)
                 Text(model.displayName(of: session))
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Ink.primary)
@@ -193,9 +203,11 @@ private struct AgentWings: View {
             Spacer(minLength: model.geometry.notchWidth)
 
             HStack(spacing: 5) {
-                Image(systemName: glance.symbol)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .contentTransition(.symbolEffect(.replace))
+                if let symbol = glance.symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .contentTransition(.symbolEffect(.replace))
+                }
                 Text(glance.text)
                     .font(.system(size: 12.5))
                     .lineLimit(1)
@@ -233,7 +245,7 @@ private struct HUDWings: View {
                     .lineLimit(1)
             }
             .padding(.leading, 14)
-            .frame(width: NotchModel.hudWing, alignment: .leading)
+            .frame(width: NotchModel.baseHUDWing, alignment: .leading)
 
             Spacer(minLength: notchWidth)
 
@@ -243,8 +255,77 @@ private struct HUDWings: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .padding(.trailing, 14)
-                .frame(width: NotchModel.hudWing, alignment: .trailing)
+                .frame(width: NotchModel.baseHUDWing, alignment: .trailing)
         }
         .onAppear { appeared = true }
+    }
+}
+
+/// An agent finished: "✓ auth-service" left of the camera, "Done 4m" right of it. The tick pops
+/// in and draws itself while the name and "Done" slide out from the camera, sharpening as they
+/// arrive; leaving, everything draws back into the camera.
+private struct DoneWings: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let message: HUDMessage
+    let notchWidth: CGFloat
+    let wing: CGFloat
+
+    @State private var appeared = false
+
+    private typealias Done = NotchModel.Done
+
+    var body: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: Done.tickGap) {
+                DoneTick(tint: message.tint, size: Done.tickSize)
+                Text(message.title)
+                    .font(.system(size: Done.titleSize, weight: .semibold))
+                    .foregroundStyle(Ink.primary)
+                    .lineLimit(1)
+                    .modifier(emerging(from: -1, delay: 0.06))
+            }
+            .padding(.leading, Done.edgePadding)
+            .frame(width: wing, alignment: .leading)
+
+            Spacer(minLength: notchWidth)
+
+            HStack(alignment: .firstTextBaseline, spacing: Done.valueGap) {
+                Text(message.value)
+                    .font(.system(size: Done.valueSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(message.tint)
+                if let detail = message.detail {
+                    Text(detail)
+                        .font(.system(size: Done.valueSize, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            .lineLimit(1)
+            // As the check finishes drawing.
+            .modifier(emerging(from: 1, delay: 0.24))
+            .padding(.trailing, Done.edgePadding)
+            .frame(width: wing, alignment: .trailing)
+        }
+        .onAppear { appeared = true }
+    }
+
+    /// Slides in from the camera's side (`side` -1 for the left wing, 1 for the right), out of a
+    /// light blur.
+    private func emerging(from side: CGFloat, delay: Double) -> Emerging {
+        Emerging(isIn: appeared || reduceMotion, offset: -side * 12, animation: .smooth(duration: 0.5).delay(delay))
+    }
+}
+
+private struct Emerging: ViewModifier {
+    let isIn: Bool
+    let offset: CGFloat
+    let animation: Animation
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isIn ? 1 : 0)
+            .offset(x: isIn ? 0 : offset)
+            .blur(radius: isIn ? 0 : 4)
+            .animation(animation, value: isIn)
     }
 }

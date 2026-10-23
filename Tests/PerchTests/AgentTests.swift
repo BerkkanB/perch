@@ -163,6 +163,42 @@ final class AgentEventTests: XCTestCase {
     }
 }
 
+final class DoneMessageTests: XCTestCase {
+    @MainActor
+    func testAFinishedTurnSaysHowLongItTook() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "perch.tests.\(UUID().uuidString)"))
+        let hud = HUDCenter()
+        let center = AgentCenter(prefs: Preferences(defaults: defaults), hud: hud)
+        center.simulate(["hook_event_name": "UserPromptSubmit", "session_id": "a", "cwd": "/code/macos-sleep-cancel", "prompt": "test"])
+        center.simulate(["hook_event_name": "Stop", "session_id": "a"])
+        let message = try XCTUnwrap(hud.current)
+        XCTAssertTrue(message.isDone)
+        XCTAssertEqual(message.title, "macos-sleep-cancel")
+        XCTAssertEqual(message.value, "Done")
+        XCTAssertEqual(message.detail, "1s", "a turn under a second still reads as a time")
+        XCTAssertEqual(HUDMessage.done("app", after: 4 * 60).detail, "4m")
+        XCTAssertNil(HUDMessage.done("app").detail)
+    }
+
+    func testTheDotGridLightsThreeDotsAtATimeAndEachInTurn() {
+        for step in 0..<9 {
+            XCTAssertEqual((0..<9).filter { DotMatrixView.isLit($0, step: step) }.count, 3)
+        }
+        for dot in 0..<9 {
+            XCTAssertEqual((0..<9).filter { DotMatrixView.isLit(dot, step: $0) }.count, 3, "every dot gets its turn")
+        }
+        XCTAssertEqual((0..<9).filter { DotMatrixView.isLit($0, step: 0) }, [0, 1, 5])
+    }
+
+    @MainActor
+    func testTheWingsFitTheNameUpToALimit() {
+        XCTAssertEqual(NotchModel.doneWing(for: .done("api")), NotchModel.baseHUDWing)
+        let long = NotchModel.doneWing(for: .done("macos-sleep-cancel", after: 11))
+        XCTAssertGreaterThan(long, NotchModel.baseHUDWing, "the whole name shows")
+        XCTAssertEqual(NotchModel.doneWing(for: .done(String(repeating: "very-long-name-", count: 5))), NotchModel.Done.maxWing)
+    }
+}
+
 final class AgentQuestionTests: XCTestCase {
     private let input: [String: Any] = ["questions": [
         [
