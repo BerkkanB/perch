@@ -117,3 +117,35 @@ final class AutoOffTimerTests: XCTestCase {
         first.cancel()
     }
 }
+
+final class SystemReadingTests: XCTestCase {
+    func testStorageSizesAreDecimalLikeFinder() {
+        XCTAssertEqual(ByteFormat.storage(82_400_000_000), "82 GB")
+        XCTAssertEqual(ByteFormat.storage(8_440_000_000), "8.4 GB")
+        XCTAssertEqual(ByteFormat.storage(1_240_000_000_000), "1.2 TB")
+        XCTAssertEqual(ByteFormat.storage(2_000_000_000_000), "2 TB")
+        XCTAssertEqual(ByteFormat.storage(640_000_000), "640 MB")
+    }
+
+    func testMemorySizesAreBinaryLikeActivityMonitor() {
+        XCTAssertEqual(ByteFormat.memory(16 * ByteFormat.gibibyte), "16 GB")
+        XCTAssertEqual(ByteFormat.memory(11 * ByteFormat.gibibyte + ByteFormat.gibibyte / 5), "11.2 GB")
+        XCTAssertEqual(ByteFormat.memory(640 << 20), "640 MB")
+        XCTAssertEqual(ByteFormat.memory(17 * ByteFormat.gibibyte + ByteFormat.gibibyte * 3 / 5, of: 24 * ByteFormat.gibibyte), "17.6 of 24 GB")
+        XCTAssertEqual(ByteFormat.memory(640 << 20, of: 8 * ByteFormat.gibibyte), "640 MB of 8 GB")
+    }
+
+    func testStorageLevelsAreInGigabytes() {
+        let gigabyte = ByteFormat.gigabyte
+        XCTAssertEqual(StorageReading(total: 494 * gigabyte, available: 82 * gigabyte).level, .ok)
+        XCTAssertEqual(StorageReading(total: 494 * gigabyte, available: 25 * gigabyte).level, .low)
+        XCTAssertEqual(StorageReading(total: 2_000 * gigabyte, available: 9 * gigabyte).level, .critical)
+    }
+
+    func testUsedFraction() {
+        let storage = StorageReading(total: 400, available: 100)
+        XCTAssertEqual(storage.used, 300)
+        XCTAssertEqual(storage.usedFraction, 0.75)
+        XCTAssertEqual(MemoryReading(total: 0, used: 10, swapUsed: 0, pressure: .normal).usedFraction, 0)
+    }
+}

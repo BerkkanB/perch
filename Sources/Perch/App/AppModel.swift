@@ -10,6 +10,7 @@ final class AppModel {
 
     let prefs: Preferences
     let power = PowerMonitor()
+    let system = SystemMonitor()
     let hud = HUDCenter()
     let access: PrivilegedAccess
     let loginItem = LoginItem()
@@ -49,6 +50,7 @@ final class AppModel {
 
     func start() {
         power.start()
+        system.start()
         modules.forEach { $0.start() }
         registerShortcuts()
         // Snapshot runs of a debug build must not take the agent socket from the running app.
@@ -60,6 +62,7 @@ final class AppModel {
     func refreshAll() {
         access.refresh()
         loginItem.refresh()
+        system.update()
         for module in modules {
             Task { await module.refresh() }
         }

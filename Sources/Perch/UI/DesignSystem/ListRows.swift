@@ -306,6 +306,166 @@ struct ControlTile: View {
     }
 }
 
+/// Startup disk and memory as two gauges under the switches. Storage opens its pane in System
+/// Settings, Memory opens Activity Monitor.
+struct SystemReadings: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        HStack(spacing: NotchModel.List.tileSpacing) {
+            if let storage = app.system.storage {
+                GaugeTile(
+                    symbol: "internaldrive.fill",
+                    title: "Storage",
+                    value: "\(ByteFormat.storage(storage.available)) free",
+                    fraction: storage.usedFraction,
+                    tint: Self.color(for: storage.level),
+                    isAlert: storage.level != .ok,
+                    help: "\(ByteFormat.storage(storage.used)) of \(ByteFormat.storage(storage.total)) used. Click to see what takes up space.",
+                    action: openStorageSettings
+                )
+            }
+            if let memory = app.system.memory {
+                GaugeTile(
+                    symbol: "memorychip.fill",
+                    title: "Memory",
+                    value: ByteFormat.memory(memory.used, of: memory.total),
+                    shortValue: ByteFormat.memory(memory.used),
+                    fraction: memory.usedFraction,
+                    tint: Self.color(for: memory.pressure),
+                    isAlert: memory.pressure != .normal,
+                    help: memoryHelp(memory),
+                    action: openActivityMonitor
+                )
+            }
+        }
+        .padding(.horizontal, NotchModel.List.rowInset - 4)
+        .frame(height: NotchModel.List.tileHeight)
+    }
+
+    private func memoryHelp(_ memory: MemoryReading) -> String {
+        var text = "Memory pressure \(memory.pressure.label.lowercased())"
+        if memory.swapUsed > 0 { text += ", \(ByteFormat.memory(memory.swapUsed)) swap" }
+        return text + ". Click to open Activity Monitor."
+    }
+
+    private func openStorageSettings() {
+        app.closeTransientUI()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.settings.Storage") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openActivityMonitor() {
+        app.closeTransientUI()
+        let url = URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app")
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    private static func color(for level: StorageReading.Level) -> Color {
+        switch level {
+        case .ok: Palette.good
+        case .low: Palette.warning
+        case .critical: Palette.danger
+        }
+    }
+
+    private static func color(for pressure: MemoryReading.Pressure) -> Color {
+        switch pressure {
+        case .normal: Palette.good
+        case .warning: Palette.warning
+        case .critical: Palette.danger
+        }
+    }
+}
+
+/// A tile with a reading and a thin bar under it: "Storage · 82 GB free", the bar filled to how
+/// much is used. The symbol takes the bar's color only when the reading needs attention.
+struct GaugeTile: View {
+    let symbol: String
+    let title: String
+    let value: String
+    /// Shown instead of `value` where it doesn't fit, as in the narrower menu bar panel.
+    var shortValue: String?
+    let fraction: Double
+    let tint: Color
+    let isAlert: Bool
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(isAlert ? tint : Color.white.opacity(0.85))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(isAlert ? tint.opacity(0.18) : Color.white.opacity(0.1)))
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Ink.primary)
+                            .fixedSize()
+                        Spacer(minLength: 4)
+                        ViewThatFits(in: .horizontal) {
+                            Text(value)
+                            if let shortValue { Text(shortValue) }
+                        }
+                        .font(.system(size: 11.5, weight: isAlert ? .semibold : .regular))
+                        .foregroundStyle(isAlert ? tint : Ink.secondary)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    }
+                    .lineLimit(1)
+                    GaugeBar(fraction: fraction, tint: tint)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(shape.fill(Color.white.opacity(isHovered ? 0.09 : 0.06)))
+            .overlay(shape.strokeBorder(isAlert ? tint.opacity(0.3) : Color.white.opacity(0.05), lineWidth: 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .animation(.easeInOut(duration: 0.3), value: value)
+        .animation(.easeInOut(duration: 0.3), value: isAlert)
+        .help(help)
+        .accessibilityElement()
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+        .accessibilityHint(help)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// A thin capsule filled to `fraction`.
+private struct GaugeBar: View {
+    let fraction: Double
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(Color.white.opacity(0.1))
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(tint)
+                        // Never thinner than its own height, so a near-empty bar still reads as a dot.
+                        .frame(width: max(proxy.size.height, proxy.size.width * min(max(fraction, 0), 1)))
+                }
+        }
+        .frame(height: 4)
+        .animation(.smooth(duration: 0.5), value: fraction)
+    }
+}
+
 /// "∞ 15m 30m 1h 2h 4h" in one track, with a thumb in the module's color that slides to the
 /// chosen segment. Picking a segment turns the module on for that long; ∞ means until you turn
 /// it off. No thumb while the module is off.

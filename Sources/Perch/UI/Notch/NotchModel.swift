@@ -181,6 +181,8 @@ final class NotchModel {
         static let tileHeight: CGFloat = 50
         static let tileSpacing: CGFloat = 8
         static let tileColumns = 3
+        /// The storage and memory gauges under the tiles.
+        static let readingsGap: CGFloat = 8
         static let trackHeight: CGFloat = 32
         static let rowHeight: CGFloat = 40
         static let rowSpacing: CGFloat = 2
@@ -244,7 +246,7 @@ final class NotchModel {
 
     var expandedHeight: CGFloat {
         geometry.notchHeight + List.statsTop + List.statsHeight + List.statsGap
-            + sessionsHeight + controlsHeight + List.bottom
+            + sessionsHeight + controlsHeight + readingsHeight + List.bottom
     }
 
     /// The main switch's line plus the tiles (the other switches, StandBy and Sleep).
@@ -252,6 +254,13 @@ final class NotchModel {
         let tiles = app.secondary.count + 2
         let rows = CGFloat((tiles + List.tileColumns - 1) / List.tileColumns)
         return List.primaryHeight + List.controlsGap + rows * List.tileHeight + (rows - 1) * List.tileSpacing
+    }
+
+    /// The storage and memory gauges; nothing until the first reading.
+    var readingsHeight: CGFloat {
+        let system = app.system
+        guard system.storage != nil || system.memory != nil else { return 0 }
+        return List.readingsGap + List.tileHeight
     }
 
     /// The agent sessions block, divider included; nothing when there are no sessions.

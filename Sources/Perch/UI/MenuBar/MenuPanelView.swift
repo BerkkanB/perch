@@ -27,6 +27,11 @@ struct MenuPanelView: View {
 
             ControlsSection()
 
+            if app.system.storage != nil || app.system.memory != nil {
+                SystemReadings()
+                    .padding(.top, Layout.readingsGap)
+            }
+
             if let notice = primary.notice {
                 NoticeRow(notice: notice)
                     .padding(.horizontal, Layout.rowInset)

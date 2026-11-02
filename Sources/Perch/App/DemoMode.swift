@@ -123,6 +123,16 @@ private struct Snapshotter {
         model.stayAwake.autoOff.cancel()
         model.stayAwake.setPreviewState(isOn: false)
 
+        // Storage and memory running low, to check the warning colors.
+        let gigabyte = ByteFormat.gigabyte, gibibyte = ByteFormat.gibibyte
+        model.system.setPreview(
+            storage: StorageReading(total: 494 * gigabyte, available: 8 * gigabyte),
+            memory: MemoryReading(total: 16 * gibibyte, used: 14 * gibibyte + gibibyte / 2, swapUsed: 3 * gibibyte, pressure: .warning)
+        )
+        await wait(500)
+        capture(notch.canvasWindow, as: "notch-expanded-low-storage", background: .menuBar)
+        model.system.start()
+
         // The opening and closing motion, frame by frame.
         notch.model.forcedPhase = .badge
         await wait(900)

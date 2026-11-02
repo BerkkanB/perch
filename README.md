@@ -52,7 +52,7 @@ on every change.
 
 | Where | What |
 | --- | --- |
-| **Notch** | Rest the pointer on the notch (or click it) and a black list drops out of it: a stats line (awake time, battery, temperature), Stay Awake with a duration track, and a line for Screen On. Changes made with the shortcut or by a timer show briefly beside the camera. |
+| **Notch** | Rest the pointer on the notch (or click it) and a black list drops out of it: a stats line (awake time, battery, temperature), Stay Awake with a duration track, tiles for Screen On, StandBy and Sleep, and gauges for free disk space and memory (yellow when the disk has under 30 GB free or memory pressure rises, red under 10 GB; click Storage for System Settings → Storage, Memory for Activity Monitor). Changes made with the shortcut or by a timer show briefly beside the camera. |
 | **Menu bar** | Click for a Liquid Glass panel laid out like the system's Wi-Fi menu. Right-click (or ⌃-click) for a quick menu. ⌥-click toggles Stay Awake. |
 | **Shortcut** | `⌃⌥⌘S` toggles Stay Awake from any app. Change it, or add one for any switch, in Settings. |
 

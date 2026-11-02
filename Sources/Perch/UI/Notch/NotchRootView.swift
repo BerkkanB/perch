@@ -72,7 +72,7 @@ private struct Blurred: ViewModifier {
     }
 }
 
-/// The open notch: readings, the main module written out, then a line per other module.
+/// The open notch: readings, the agents, the switches, then storage and memory.
 private struct NotchListContent: View {
     @Environment(AppModel.self) private var app
     let model: NotchModel
@@ -94,6 +94,11 @@ private struct NotchListContent: View {
             }
 
             ControlsSection()
+
+            if app.system.storage != nil || app.system.memory != nil {
+                SystemReadings()
+                    .padding(.top, Layout.readingsGap)
+            }
 
             Spacer(minLength: 0)
         }
