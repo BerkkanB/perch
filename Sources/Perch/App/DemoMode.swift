@@ -120,7 +120,16 @@ private struct Snapshotter {
         model.stayAwake.autoOff.start(duration: 60 * 60)
         await wait(500)
         capture(notch.canvasWindow, as: "notch-expanded-awake", background: .menuBar)
+
+        // The countdown part way through, in its last minute, and with no time limit.
+        for (name, remaining, total) in [("half", 12.0 * 60 + 34, 30.0 * 60), ("last-minute", 42.0, 15.0 * 60)] {
+            model.stayAwake.autoOff.setPreview(remaining: remaining, of: total)
+            await wait(1300)
+            capture(notch.canvasWindow, as: "notch-expanded-awake-\(name)", background: .menuBar)
+        }
         model.stayAwake.autoOff.cancel()
+        await wait(1300)
+        capture(notch.canvasWindow, as: "notch-expanded-awake-infinite", background: .menuBar)
         model.stayAwake.setPreviewState(isOn: false)
 
         // Storage and memory running low, to check the warning colors.
@@ -219,6 +228,21 @@ private struct Snapshotter {
         await wait(700)
         capture(statusItem.panelWindow, as: "menu", background: .desktop)
         statusItem.closePanel()
+
+        // The menu bar panel with a timer running. Set after opening, which re-reads pmset.
+        await wait(400) // the close animation
+        statusItem.showPanel()
+        // Twice: the refresh that opening starts can land after the first.
+        for _ in 0..<2 {
+            await wait(1000)
+            model.stayAwake.setPreviewState(isOn: true)
+            model.stayAwake.autoOff.setPreview(remaining: 18 * 60 + 5, of: 30 * 60)
+        }
+        await wait(1000)
+        capture(statusItem.panelWindow, as: "menu-awake", background: .desktop)
+        statusItem.closePanel()
+        model.stayAwake.autoOff.cancel()
+        model.stayAwake.setPreviewState(isOn: false)
 
         // StandBy, built off screen so the snapshot doesn't take over the Mac.
         standby.show(onScreen: false)

@@ -50,6 +50,8 @@ enum Motion {
     static let contentIn = Animation.smooth(duration: 0.25)
     static let contentOut = Animation.easeIn(duration: 0.15)
     static let selection = Animation.snappy(duration: 0.3)
+    /// The duration track and the countdown giving way to each other.
+    static let swap = Animation.smooth(duration: 0.4)
     static let hover = Animation.easeOut(duration: 0.15)
     /// Replaces every animation above while Reduce Motion is on: cross-fades only.
     static let reduced = Animation.easeInOut(duration: 0.2)

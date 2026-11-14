@@ -210,14 +210,21 @@ struct ControlsSection: View {
     }
 }
 
-/// The main switch in one line: its symbol and name (click to turn it on or off), then the
-/// duration track on the right.
+/// The main switch in one line: its symbol and name (click to turn it on or off), then on the
+/// right the duration track. While a timer runs, the track gives way to the countdown, and the
+/// end time shows under the name. Clicking the countdown brings the track back.
 struct PrimaryControlRow: View {
     let module: any PerchModule
 
     @State private var isHovered = false
+    /// The track is back over the countdown, to pick another time.
+    @State private var isEditing = false
+    /// The segment just picked, shown as selected while the switch turns on.
+    @State private var pending: DurationChoice?
 
     var body: some View {
+        let counting = module.isOn && module.timer?.isRunning == true && !isEditing && pending == nil
+
         HStack(spacing: 12) {
             Button {
                 Task { await module.toggle(source: .ui) }
@@ -228,10 +235,19 @@ struct PrimaryControlRow: View {
                         .foregroundStyle(module.isOn ? module.tint : Ink.tertiary)
                         .frame(width: 22, height: 22)
                         .contentTransition(.symbolEffect(.replace))
-                    Text(module.title)
-                        .font(.system(size: 14.5, weight: .medium))
-                        .foregroundStyle(isHovered ? Ink.primary : Color.white.opacity(0.9))
-                        .fixedSize()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(module.title)
+                            .font(.system(size: 14.5, weight: .medium))
+                            .foregroundStyle(isHovered ? Ink.primary : Color.white.opacity(0.9))
+                        if counting, let end = module.timer?.endsAt {
+                            Text("until \(end.formatted(date: .omitted, time: .shortened))")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Ink.secondary)
+                                .monospacedDigit()
+                                .transition(.opacity)
+                        }
+                    }
+                    .fixedSize()
                 }
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -245,14 +261,162 @@ struct PrimaryControlRow: View {
 
             Spacer(minLength: 8)
 
-            if module.timer != nil {
-                DurationTrack(module: module, height: 30)
-                    .frame(maxWidth: 296)
+            if let timer = module.timer {
+                ZStack(alignment: .trailing) {
+                    if counting {
+                        CountdownControls(module: module, timer: timer) {
+                            withAnimation(Self.swap) { isEditing = true }
+                        }
+                        .transition(Self.swapTransition)
+                    } else {
+                        DurationTrack(module: module, height: 30, pending: pending, onPick: pick)
+                            .frame(maxWidth: 296)
+                            .onHover { inside in
+                                // Leaving without picking keeps the time as it was.
+                                guard !inside, isEditing, pending == nil else { return }
+                                withAnimation(Self.swap) { isEditing = false }
+                            }
+                            .transition(Self.swapTransition)
+                    }
+                }
             }
         }
         .padding(.horizontal, NotchModel.List.rowInset)
         .animation(Motion.hover, value: isHovered)
-        .animation(.easeInOut(duration: 0.2), value: module.isOn)
+        .animation(Self.swap, value: counting)
+        .onChange(of: module.isOn) { _, isOn in
+            if !isOn { isEditing = false }
+        }
+    }
+
+    private static var swap: Animation { Motion.reduceMotion ? Motion.reduced : Motion.swap }
+    private static var swapTransition: AnyTransition {
+        Motion.reduceMotion ? .opacity : AnyTransition(.blurReplace)
+    }
+
+    /// Slides the thumb to `choice` at once, then swaps to the countdown once the switch is on.
+    private func pick(_ choice: DurationChoice) {
+        withAnimation(Motion.reduceMotion ? Motion.reduced : Motion.selection) { pending = choice }
+        Task {
+            await module.activate(for: choice.seconds, source: .ui)
+            withAnimation(Self.swap) {
+                pending = nil
+                isEditing = false
+            }
+        }
+    }
+}
+
+/// A running timer, like a Live Activity: the time left in large rolling digits (click them to
+/// pick another time), +15m, and a stop button ringed by the share of time left.
+struct CountdownControls: View {
+    static let extendStep: TimeInterval = 15 * 60
+
+    let module: any PerchModule
+    let timer: AutoOffTimer
+    let onEdit: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = timer.remaining(at: context.date) ?? 0
+            let tick = Int(remaining.rounded(.up))
+
+            HStack(spacing: 8) {
+                Button(action: onEdit) {
+                    Text(DurationFormat.clock(remaining))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(module.tint)
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(Motion.reduceMotion ? nil : .snappy(duration: 0.35), value: tick)
+                        .padding(.horizontal, 9)
+                        .frame(height: 32)
+                        .background(Capsule().fill(Color.white.opacity(isHovered ? 0.08 : 0)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered = $0 }
+                .help("Pick another time")
+                .accessibilityLabel("Time left")
+                .accessibilityValue(DurationFormat.remaining(remaining))
+                .accessibilityHint("Pick another time")
+
+                TintedCapsuleButton(title: "+15m", tint: module.tint, help: "Add 15 minutes") {
+                    timer.extend(by: Self.extendStep)
+                }
+
+                StopRingButton(fraction: timer.fractionRemaining(at: context.date), tick: tick, tint: module.tint) {
+                    Task { await module.setOn(false, source: .ui) }
+                }
+            }
+        }
+        .disabled(module.isBusy)
+        .animation(Motion.hover, value: isHovered)
+    }
+}
+
+/// A capsule in a light wash of the tint, like the buttons in a Live Activity.
+private struct TintedCapsuleButton: View {
+    let title: String
+    let tint: Color
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(Capsule().fill(tint.opacity(isHovered ? 0.28 : 0.17)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// A round stop button whose rim shows the share of time left, like a download in the App Store.
+/// The ring starts at the top and shrinks back counterclockwise.
+private struct StopRingButton: View {
+    let fraction: Double
+    let tick: Int
+    let tint: Color
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle().fill(tint.opacity(isHovered ? 0.28 : 0.17))
+                Circle()
+                    .trim(from: 0, to: min(max(fraction, 0), 1))
+                    .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(1.25)
+                    .animation(Motion.reduceMotion ? nil : .linear(duration: 1), value: tick)
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(tint)
+            }
+            .frame(width: 30, height: 30)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .help("Turn Stay Awake off")
+        .accessibilityLabel("Turn Stay Awake off")
     }
 }
 
@@ -472,11 +636,15 @@ private struct GaugeBar: View {
 struct DurationTrack: View {
     let module: any PerchModule
     var height: CGFloat = NotchModel.List.trackHeight
+    /// Shown as selected while the switch is still turning on.
+    var pending: DurationChoice?
+    /// Replaces turning the module on directly.
+    var onPick: ((DurationChoice) -> Void)?
 
     @Namespace private var thumbSpace
 
     var body: some View {
-        let selection = DurationChoice.current(for: module)
+        let selection = pending ?? DurationChoice.current(for: module)
 
         HStack(spacing: 0) {
             ForEach(DurationChoice.all) { choice in
@@ -486,7 +654,11 @@ struct DurationTrack: View {
                     tint: module.tint,
                     thumbSpace: thumbSpace
                 ) {
-                    Task { await module.activate(for: choice.seconds, source: .ui) }
+                    if let onPick {
+                        onPick(choice)
+                    } else {
+                        Task { await module.activate(for: choice.seconds, source: .ui) }
+                    }
                 }
             }
         }

@@ -76,6 +76,14 @@ final class FormattingTests: XCTestCase {
         XCTAssertEqual(DurationFormat.compact(65 * 60), "1h 5m")
     }
 
+    func testClock() {
+        XCTAssertEqual(DurationFormat.clock(8.2), "0:09")
+        XCTAssertEqual(DurationFormat.clock(29 * 60 + 41), "29:41")
+        XCTAssertEqual(DurationFormat.clock(60 * 60), "1:00:00")
+        XCTAssertEqual(DurationFormat.clock(2 * 3600 + 5 * 60 + 3), "2:05:03")
+        XCTAssertEqual(DurationFormat.clock(-3), "0:00")
+    }
+
     func testRemaining() {
         XCTAssertEqual(DurationFormat.remaining(59), "59s left")
         XCTAssertEqual(DurationFormat.remaining(61), "2m left")
@@ -106,6 +114,24 @@ final class AutoOffTimerTests: XCTestCase {
         await fulfillment(of: [fired], timeout: 2)
         XCTAssertFalse(timer.isRunning)
         XCTAssertNil(defaults.dictionary(forKey: "t"))
+    }
+
+    func testExtendAddsTimeAndKeepsItSaved() {
+        let timer = AutoOffTimer(storageKey: "t", defaults: defaults)
+        timer.start(duration: 30 * 60)
+        let end = timer.endsAt ?? .distantPast
+        timer.extend(by: 15 * 60)
+        XCTAssertEqual(timer.duration, 45 * 60)
+        XCTAssertEqual(timer.endsAt?.timeIntervalSince(end) ?? 0, 15 * 60, accuracy: 0.01)
+        let restored = AutoOffTimer(storageKey: "t", defaults: defaults)
+        XCTAssertEqual(restored.duration, 45 * 60)
+        timer.cancel()
+    }
+
+    func testExtendDoesNothingWithoutATimer() {
+        let timer = AutoOffTimer(storageKey: "t", defaults: defaults)
+        timer.extend(by: 15 * 60)
+        XCTAssertFalse(timer.isRunning)
     }
 
     func testSurvivesRelaunch() {

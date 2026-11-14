@@ -46,6 +46,16 @@ final class AutoOffTimer {
         schedule()
     }
 
+    /// Adds time to a running timer. The added time also counts toward the total, so a progress
+    /// bar refills by the same share.
+    func extend(by seconds: TimeInterval) {
+        guard let endsAt, let duration else { return }
+        self.endsAt = endsAt.addingTimeInterval(seconds)
+        self.duration = duration + seconds
+        save()
+        schedule()
+    }
+
     func cancel() {
         task?.cancel()
         task = nil
@@ -82,6 +92,15 @@ final class AutoOffTimer {
         await onExpire?()
     }
 
+    #if DEBUG
+    /// For snapshots of a timer part way through, without waiting.
+    func setPreview(remaining: TimeInterval, of duration: TimeInterval) {
+        task?.cancel()
+        endsAt = Date().addingTimeInterval(remaining)
+        self.duration = duration
+    }
+    #endif
+
     private func save() {
         if let endsAt, let duration {
             defaults.set(["endsAt": endsAt, "duration": duration], forKey: storageKey)
@@ -108,6 +127,15 @@ enum DurationFormat {
         let minutes = (total + 59) / 60
         if minutes < 60 { return "\(minutes)m left" }
         return String(format: "%dh %02dm left", minutes / 60, minutes % 60)
+    }
+
+    /// A clock-style countdown: "0:09", "29:41", "1:59:41"
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded(.up)))
+        let hours = total / 3600, minutes = total / 60 % 60, rest = total % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, rest)
+            : String(format: "%d:%02d", minutes, rest)
     }
 
     /// Tight form for monospaced readouts: "45s", "27m", "2h", "4h1m"

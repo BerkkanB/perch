@@ -57,6 +57,8 @@ on every change.
 | **Shortcut** | `⌃⌥⌘S` toggles Stay Awake from any app. Change it, or add one for any switch, in Settings. |
 
 The duration track (`∞ 15m 30m 1h 2h 4h`) turns Stay Awake on for that long; ∞ means until you turn it off.
+While a timer runs, the track gives way to a countdown: the time left in large digits, **+15m**,
+and a stop button whose ring shows the time left. Click the time to pick another.
 
 <p align="center">
   <img src="docs/images/notch-stay-awake.png" width="572" alt="Stay Awake on for one hour, with the awake time, battery and temperature above it">
