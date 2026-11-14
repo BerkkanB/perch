@@ -233,7 +233,7 @@ final class StandByController {
         guard minutes > 0 else { return }
         idleTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, !self.isShown, !Self.isScreenLocked, !self.app.power.isLidClosed else { return }
+                guard let self, !self.isShown, !UserSession.isScreenLocked, !self.app.power.isLidClosed else { return }
                 if Self.idleSeconds >= TimeInterval(minutes * 60) { self.show(fromIdle: true) }
             }
         }
@@ -243,11 +243,6 @@ final class StandByController {
     private static var idleSeconds: TimeInterval {
         guard let anyInput = CGEventType(rawValue: ~0) else { return 0 }
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
-    }
-
-    private static var isScreenLocked: Bool {
-        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
-        return session["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 }
 

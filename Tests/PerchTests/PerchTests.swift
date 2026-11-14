@@ -118,6 +118,25 @@ final class AutoOffTimerTests: XCTestCase {
     }
 }
 
+final class ClosedLidTests: XCTestCase {
+    func testClosedLidSleeps() {
+        XCTAssertTrue(PowerMonitor.closedLidShouldSleep(lidClosed: true, externalDisplay: false, onACPower: false))
+        XCTAssertTrue(PowerMonitor.closedLidShouldSleep(lidClosed: true, externalDisplay: false, onACPower: true))
+    }
+
+    func testExternalDisplayOnBatteryStillSleeps() {
+        XCTAssertTrue(PowerMonitor.closedLidShouldSleep(lidClosed: true, externalDisplay: true, onACPower: false))
+    }
+
+    func testClamshellModeStaysAwake() {
+        XCTAssertFalse(PowerMonitor.closedLidShouldSleep(lidClosed: true, externalDisplay: true, onACPower: true))
+    }
+
+    func testOpenLidNeverForcesSleep() {
+        XCTAssertFalse(PowerMonitor.closedLidShouldSleep(lidClosed: false, externalDisplay: false, onACPower: false))
+    }
+}
+
 final class SystemReadingTests: XCTestCase {
     func testStorageSizesAreDecimalLikeFinder() {
         XCTAssertEqual(ByteFormat.storage(82_400_000_000), "82 GB")

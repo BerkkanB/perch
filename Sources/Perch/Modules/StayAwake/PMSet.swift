@@ -9,6 +9,11 @@ enum PMSet {
         [executable, "-a", "disablesleep", disableSleep ? "1" : "0"]
     }
 
+    /// `pmset sleepnow` puts the Mac to sleep right away. Needs no root.
+    static func sleepNow() async -> Bool {
+        await Shell.run(executable, ["sleepnow"]).succeeded
+    }
+
     /// Reads the flag with `pmset -g`, which needs no root. `nil` if pmset could not run.
     static func readSleepDisabled() async -> Bool? {
         let result = await Shell.run(executable, ["-g"])

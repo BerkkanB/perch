@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import IOKit
 import IOKit.ps
@@ -21,6 +22,16 @@ final class PowerMonitor {
     @ObservationIgnored private var thermalObserver: NSObjectProtocol?
 
     var isLidClosed: Bool { Self.readClamshellClosed() }
+
+    /// The lid is closed and macOS would normally be asleep. It keeps running with the lid closed
+    /// only in clamshell mode, with an external display and a charger.
+    var closedLidShouldSleep: Bool {
+        Self.closedLidShouldSleep(lidClosed: isLidClosed, externalDisplay: Self.hasExternalDisplay(), onACPower: isOnACPower)
+    }
+
+    nonisolated static func closedLidShouldSleep(lidClosed: Bool, externalDisplay: Bool, onACPower: Bool) -> Bool {
+        lidClosed && !(externalDisplay && onACPower)
+    }
 
     func start() {
         update()
@@ -88,6 +99,14 @@ final class PowerMonitor {
         let value = IORegistryEntryCreateCFProperty(service, "AppleClamshellState" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue()
         return value as? Bool ?? false
+    }
+
+    private static func hasExternalDisplay() -> Bool {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return false }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else { return false }
+        return displays.prefix(Int(count)).contains { CGDisplayIsBuiltin($0) == 0 }
     }
 }
 

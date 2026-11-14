@@ -68,6 +68,9 @@ A closed MacBook that never sleeps can overheat in a bag, so Stay Awake also:
 
 - lets the Mac sleep when running on battery below a chosen level (default 15%),
 - lets the Mac sleep when it is critically hot, or hot with the lid closed,
+- puts the Mac to sleep when a timer ends or one of these guards trips with the lid closed
+  (macOS only sleeps at the moment the lid closes, so it would otherwise keep running), and
+  shows what happened in the notch once you open the lid and unlock,
 - remembers timers across relaunches, and turns sleep back on at quit if a timer is running,
 - can optionally turn sleep back on whenever Perch quits.
 

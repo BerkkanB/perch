@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Observation
 
@@ -35,17 +36,21 @@ final class StayAwakeModule: PerchModule {
     @ObservationIgnored private var hasLoadedState = false
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var lastGuardAttempt: Date?
+    /// What a timer or guard did while the lid was closed, shown once you're back.
+    @ObservationIgnored private var missedMessage: HUDMessage?
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init(context: ModuleContext) {
         self.context = context
         autoOff = AutoOffTimer(storageKey: "timer.stay-awake", defaults: context.defaults)
         autoOff.onExpire = { [weak self] in
-            await self?.setOn(false, source: .automation(reason: "Timer ended"))
+            await self?.endStayAwake(reason: "Timer ended")
         }
     }
 
     func start() {
         context.power.onChange.append { [weak self] in self?.checkGuards() }
+        observeReturn()
         // pmset has no change notification, and `pmset -g` takes a few milliseconds,
         // so polling picks up changes made in the Terminal.
         pollTask = Task { [weak self] in
@@ -68,6 +73,8 @@ final class StayAwakeModule: PerchModule {
             autoOff.cancel()
         }
         checkGuards()
+        // Opening the lid of a Mac that didn't sleep sends no wake notification.
+        showMissedMessage()
     }
 
     func setOn(_ on: Bool, source: ToggleSource) async {
@@ -145,7 +152,57 @@ final class StayAwakeModule: PerchModule {
         // Don't retry every poll if the user dismissed the password prompt.
         if let last = lastGuardAttempt, Date().timeIntervalSince(last) < 5 * 60 { return }
         lastGuardAttempt = Date()
-        Task { await setOn(false, source: .automation(reason: reason)) }
+        Task { await endStayAwake(reason: reason) }
+    }
+
+    // MARK: Closed lid
+
+    /// Turns Stay Awake off when its timer ends or a guard trips.
+    ///
+    /// macOS sleeps at the moment the lid closes. If that moment passed while Stay Awake was on,
+    /// turning sleep back on doesn't bring it back, and the Mac would run in the bag until the
+    /// battery is empty. So with the lid closed, Perch puts the Mac to sleep itself.
+    private func endStayAwake(reason: String) async {
+        await setOn(false, source: .automation(reason: reason))
+        guard !isOn, context.power.closedLidShouldSleep else { return }
+
+        // Give macOS a moment to apply the change. The lid may open meanwhile.
+        try? await Task.sleep(for: .seconds(2))
+        guard !isOn, context.power.closedLidShouldSleep else { return }
+
+        // Set before sleeping: the wake notification can arrive as soon as the lid opens.
+        let time = Date().formatted(date: .omitted, time: .shortened)
+        missedMessage = HUDMessage(symbol: "moon.zzz.fill", title: "Slept \(time)", value: reason, tint: Palette.sleep)
+        notice = ModuleNotice(kind: .info, message: "Slept with the lid closed · \(reason)")
+        if await !PMSet.sleepNow() {
+            missedMessage = nil
+            notice = ModuleNotice(kind: .warning, message: "Couldn't sleep with the lid closed · \(reason)")
+        }
+    }
+
+    /// The HUD shown while the lid was closed went by unseen, so it comes back on your return.
+    private func observeReturn() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showMissedMessage() }
+        })
+        let distributed = DistributedNotificationCenter.default()
+        observers.append(distributed.addObserver(forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showMissedMessage() }
+        })
+    }
+
+    /// Shows `missedMessage` once the lid is open and the screen unlocked.
+    private func showMissedMessage() {
+        guard let message = missedMessage else { return }
+        Task { [weak self] in
+            // Let the notch settle after waking or unlocking.
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self, missedMessage == message,
+                  !context.power.isLidClosed, !UserSession.isScreenLocked else { return }
+            missedMessage = nil
+            context.hud.show(message, for: 6)
+        }
     }
 
     // MARK: HUD

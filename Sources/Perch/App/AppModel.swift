@@ -104,8 +104,7 @@ final class AppModel {
                 // Still on: the password prompt was cancelled, so don't sleep.
                 guard !stayAwake.isOn else { return }
             }
-            let result = await Shell.run("/usr/bin/pmset", ["sleepnow"])
-            if !result.succeeded {
+            if await !PMSet.sleepNow() {
                 hud.show(HUDMessage(symbol: "exclamationmark.triangle.fill", title: "Sleep", value: "failed", tint: Palette.danger))
             }
         }
