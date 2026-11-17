@@ -229,8 +229,8 @@ private struct AgeText: View {
 }
 
 /// What the agent wants to run, with Allow and Deny, or Claude's questions with Submit.
-/// "Answer in Terminal" leaves it to the agent's own prompt (to type your own answer, say) and
-/// brings its terminal forward.
+/// "Answer in Ghostty" (or whichever app the agent runs in) leaves it to the agent's own prompt,
+/// to type your own answer, say, and brings that app forward.
 private struct ApprovalBox: View {
     @Environment(AppModel.self) private var app
     @Environment(\.agentsInteractive) private var isInteractive
@@ -259,11 +259,8 @@ private struct ApprovalBox: View {
                     .frame(height: Layout.approvalButtonsHeight)
             } else {
                 HStack(spacing: 8) {
-                    Button("Answer in Terminal") { app.agents.answerInTerminal(session.id) }
-                        .buttonStyle(.plain)
-                        .font(Ink.body)
-                        .foregroundStyle(Ink.secondary)
-                    Spacer()
+                    AnswerInAppLink(terminal: session.terminal) { app.agents.answerInApp(session.id) }
+                    Spacer(minLength: 0)
                     if approval.questions.isEmpty {
                         ApprovalButton(title: "Deny", isProminent: false) { app.agents.decide(session.id, allow: false) }
                         ApprovalButton(title: "Allow", isProminent: true) { app.agents.decide(session.id, allow: true) }
@@ -468,6 +465,49 @@ private struct FadingScroll<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+/// "[icon] Answer in Ghostty ↗", naming the app the agent runs in (the Claude app, VS Code, a
+/// terminal), or "I'll answer" when Perch doesn't know it.
+private struct AnswerInAppLink: View {
+    let terminal: TerminalInfo?
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        let appName = terminal?.appName
+
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon = terminal?.appIcon {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 16, height: 16)
+                }
+                Text(appName.map { "Answer in \($0)" } ?? "I'll answer")
+                    .font(Ink.body)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if appName != nil {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 9.5, weight: .semibold))
+                }
+            }
+            .foregroundStyle(isHovered ? Ink.primary : Ink.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(isHovered ? Ink.hover : .clear))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        // The hover background reaches past the text, so the text still lines up with the box above.
+        .padding(.leading, -7)
+        .onHover { isHovered = $0 }
+        .animation(Motion.hover, value: isHovered)
+        .help(appName.map { "Answer in Claude Code's own prompt in \($0)" } ?? "Leave this to Claude Code's own prompt")
     }
 }
 

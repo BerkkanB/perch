@@ -131,7 +131,7 @@ final class AgentCenter {
     }
 
     /// Leaves the decision to the agent's own prompt in its terminal, and brings that forward.
-    func answerInTerminal(_ sessionID: String) {
+    func answerInApp(_ sessionID: String) {
         guard let session = sessions.first(where: { $0.id == sessionID }) else { return }
         clearApproval(of: sessionID)
         TerminalJumper.jump(to: session.terminal)

@@ -87,11 +87,13 @@ Perch can follow your Claude Code sessions in the notch, like the Dynamic Island
   session thinks or works, its dot becomes a small 3×3 grid with a band of light stepping
   through it, beside the camera too. Click one to bring its terminal forward.
 - **Approvals**: when Claude Code asks for permission, the notch opens with the whole command
-  (long ones scroll) and **Allow** / **Deny**. "Answer in Terminal" (or ignoring it) leaves the
-  choice to Claude Code's own prompt.
+  (long ones scroll) and **Allow** / **Deny**. "Answer in Claude" (or Ghostty, VS Code, … whichever
+  app the session runs in, with its icon) brings that app forward and leaves the choice to Claude
+  Code's own prompt, as does ignoring it. When Perch can't tell the app, it reads "I'll answer".
 - **Questions**: when Claude asks you something (its multiple-choice questions), the notch shows
   each question with its options, as radio buttons or checkboxes when you can pick several, and
-  **Submit** sends your picks back. To type an answer of your own, use "Answer in Terminal".
+  **Submit** sends your picks back. To type an answer of your own, use "Answer in Claude" (or the
+  app the session runs in).
 - **Usage**: the top line shows Claude's 5-hour and weekly limits: `5h 11% 4h1m | 7d 2% 6h1m`.
 - A message beside the camera for 3.5 s when a session finishes: "✓ my-project ··· Done 4m",
   with how long the turn took. The tick pops in and draws itself, the name and "Done" slide out

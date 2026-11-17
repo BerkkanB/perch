@@ -154,7 +154,7 @@ event plus terminal details (`__CFBundleIdentifier`, `TERM_PROGRAM`, tty, tmux p
 - Events: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse(Failure), PermissionRequest,
   Notification, Stop, StopFailure, SessionEnd → one card per session.
 - Approvals: the helper holds the `PermissionRequest` open (hook timeout 600 s) until Allow or
-  Deny in the notch, then prints Claude Code's decision JSON. "Answer in Terminal", a later event
+  Deny in the notch, then prints Claude Code's decision JSON. "Answer in <app>", a later event
   for the session, Perch quitting, or the timeout all return no decision, so Claude Code's own
   prompt takes over. The notch opens by itself and stays open while a request waits. Allow
   echoes the tool input back as `updatedInput`, since ExitPlanMode and AskUserQuestion don't run

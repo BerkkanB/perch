@@ -153,6 +153,11 @@ struct TerminalInfo: Equatable {
         return termProgram.map(Self.prettyTermProgram)
     }
 
+    /// The app's icon, shown beside "Answer in Ghostty".
+    @MainActor var appIcon: NSImage? {
+        bundleID.flatMap(Self.appIcon(for:))
+    }
+
     static func bundleID(forTermProgram program: String?) -> String? {
         switch program {
         case "Apple_Terminal": "com.apple.Terminal"
@@ -183,6 +188,16 @@ struct TerminalInfo: Equatable {
         let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
         nameCache[bundleID] = name
         return name
+    }
+
+    @MainActor private static var iconCache: [String: NSImage] = [:]
+
+    @MainActor private static func appIcon(for bundleID: String) -> NSImage? {
+        if let cached = iconCache[bundleID] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        iconCache[bundleID] = icon
+        return icon
     }
 }
 
