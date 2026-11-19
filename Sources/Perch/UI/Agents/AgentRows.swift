@@ -111,34 +111,43 @@ struct AgentStatusMark: View {
         case notch, card, row
     }
 
-    let session: AgentSession
+    let state: AgentSession.State
     let size: Size
+
+    init(state: AgentSession.State, size: Size) {
+        self.state = state
+        self.size = size
+    }
+
+    init(session: AgentSession, size: Size) {
+        self.init(state: session.state, size: size)
+    }
 
     var body: some View {
         Group {
-            if session.state == .working {
+            if state == .working {
                 switch size {
-                case .notch: DotMatrix(tint: session.state.color, dot: 2.5, gap: 1.25)
-                case .card: DotMatrix(tint: session.state.color, dot: 4, gap: 2)
-                case .row: DotMatrix(tint: session.state.color, dot: 2.5, gap: 1.25)
+                case .notch: DotMatrix(tint: state.color, dot: 2.5, gap: 1.25)
+                case .card: DotMatrix(tint: state.color, dot: 4, gap: 2)
+                case .row: DotMatrix(tint: state.color, dot: 2.5, gap: 1.25)
                 }
             } else {
                 switch size {
                 case .notch:
-                    PulsingDot(tint: session.state.color, size: 6)
+                    PulsingDot(tint: state.color, size: 6)
                 case .card:
                     Image(systemName: "sparkle")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(session.state.color)
+                        .foregroundStyle(state.color)
                 case .row:
                     Circle()
-                        .fill(session.state.color)
+                        .fill(state.color)
                         .frame(width: 8, height: 8)
                 }
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.6)))
-        .animation(.smooth(duration: 0.3), value: session.state == .working)
+        .animation(.smooth(duration: 0.3), value: state == .working)
     }
 }
 

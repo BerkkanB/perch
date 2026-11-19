@@ -19,11 +19,17 @@ struct NotchRootView: View {
     private var content: some View {
         switch model.contentPhase {
         case .badge?:
-            if let session = model.glanceSession {
-                AgentWings(session: session, others: model.otherActiveSessions, model: model)
-                    .frame(size: model.bodySize(for: .badge))
-                    .id(session.id)
-                    .transition(.opacity)
+            if let badge = model.glanceBadge {
+                // Updated in place from one agent to the next: their turns cross-fade inside.
+                AgentWings(
+                    badge: badge,
+                    turn: BadgeTurn(sessionID: badge.id, rotation: model.glanceRotation),
+                    wing: model.badgeWing,
+                    notchWidth: model.geometry.notchWidth
+                )
+                .equatable()
+                .frame(size: model.bodySize(for: .badge))
+                .transition(.opacity)
             } else if let module = model.badgeModule {
                 BadgeWings(module: module, model: model)
                     .frame(size: model.bodySize(for: .badge))
@@ -175,58 +181,53 @@ private struct BadgeWings: View {
     }
 }
 
-/// What an agent is doing, beside the camera: a pulsing dot in its state color, the project and
-/// "+N" when more agents are busy on the left; a symbol and the file or command on the right
-/// ("✎ middleware.ts"). Both sides are the same width.
-private struct AgentWings: View {
-    let session: AgentSession
-    let others: Int
-    let model: NotchModel
+/// What an agent is doing, beside the camera: the dot grid (or a pulsing dot) in its state color,
+/// the project and "+N" when more agents are busy on the left; a symbol and the file or command
+/// on the right ("✎ middleware.ts"). Both sides are the same width.
+///
+/// It changes every few seconds while agents work, so the changes play in Core Animation: the
+/// next agent's turn cross-fades the name and the right wing (the dot grid stays, every grid
+/// keeping the same time), and a new glance cross-fades the text and replaces the symbol. Only a
+/// change of state, which is rare, still animates in SwiftUI.
+private struct AgentWings: View, Equatable {
+    let badge: AgentBadge
+    let turn: BadgeTurn
+    let wing: CGFloat
+    let notchWidth: CGFloat
 
     var body: some View {
-        let wing = model.badgeWing
-        let glance = session.badgeGlance
-
         HStack(spacing: 0) {
             HStack(spacing: 7) {
-                AgentStatusMark(session: session, size: .notch)
-                Text(model.displayName(of: session))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Ink.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if others > 0 {
-                    Text("+\(others)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Ink.tertiary)
-                        .fixedSize()
+                AgentStatusMark(state: badge.state, size: .notch)
+                    .animation(.easeInOut(duration: 0.2), value: badge.state)
+                    // Another agent gets a mark of its own, at once, as before.
+                    .id(badge.id)
+                LayerCrossfade(key: turn, fade: BadgeTurn.fade) {
+                    HStack(spacing: 7) {
+                        Text(badge.name)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Ink.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if badge.others > 0 {
+                            Text("+\(badge.others)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Ink.tertiary)
+                                .fixedSize()
+                        }
+                    }
                 }
             }
             .padding(.leading, 14)
             .frame(width: wing, alignment: .leading)
 
-            Spacer(minLength: model.geometry.notchWidth)
+            Spacer(minLength: notchWidth)
 
-            HStack(spacing: 5) {
-                if let symbol = glance.symbol {
-                    Image(systemName: symbol)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                Text(glance.text)
-                    .font(.system(size: 12.5))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .contentTransition(.opacity)
-            }
-            .foregroundStyle(session.state.color)
-            .padding(.trailing, 14)
-            .frame(width: wing, alignment: .trailing)
+            GlanceWing(turn: turn, glance: badge.glance, color: badge.state.color)
+                .frame(width: wing)
         }
-        .animation(.easeOut(duration: 0.2), value: glance)
-        .animation(.easeInOut(duration: 0.2), value: session.state)
         .accessibilityElement()
-        .accessibilityLabel("\(session.project): \(session.statusText)")
+        .accessibilityLabel(badge.accessibilityLabel)
     }
 }
 

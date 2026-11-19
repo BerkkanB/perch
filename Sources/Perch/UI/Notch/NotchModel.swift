@@ -37,6 +37,18 @@ struct NotchGeometry: Equatable {
     }
 }
 
+/// Everything the collapsed notch shows about an agent, and nothing more: the badge redraws when
+/// one of these changes, not on every hook event that touches the session.
+struct AgentBadge: Equatable {
+    var id: String
+    var name: String
+    /// Other agents working or waiting, shown as "+N".
+    var others: Int
+    var state: AgentSession.State
+    var glance: AgentGlance
+    var accessibilityLabel: String
+}
+
 /// The notch's state. `targetPhase` is what it should show; `NotchController` animates the
 /// black shape toward it in stages and sets `contentPhase` once the shape has room for it.
 @MainActor
@@ -90,6 +102,20 @@ final class NotchModel {
         guard !active.isEmpty else { return nil }
         if let waiting = active.first(where: { $0.state == .waiting }) { return waiting }
         return active[glanceRotation % active.count]
+    }
+
+    /// What the collapsed notch shows for `glanceSession`.
+    var glanceBadge: AgentBadge? {
+        glanceSession.map { session in
+            AgentBadge(
+                id: session.id,
+                name: displayName(of: session),
+                others: otherActiveSessions,
+                state: session.state,
+                glance: session.badgeGlance,
+                accessibilityLabel: "\(session.project): \(session.statusText)"
+            )
+        }
     }
 
     /// The name to show for `session`, told apart from others in the same folder.

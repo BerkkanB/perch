@@ -433,6 +433,9 @@ final class DotMatrixView: NSView {
             band.duration = period
             band.repeatCount = .infinity
             band.timeOffset = phase
+            // Slow fades of small dots look the same at 60 frames a second as at 120, and on
+            // ProMotion this lets the window server redraw them half as often, for hours at a time.
+            band.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
             layer.add(band, forKey: "band")
         }
     }

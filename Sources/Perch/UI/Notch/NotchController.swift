@@ -82,12 +82,15 @@ final class NotchController {
         glanceTimer?.invalidate()
         glanceTimer = nil
         guard on else { return }
-        glanceTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
-                withAnimation(.easeInOut(duration: 0.35)) { self.model.glanceRotation += 1 }
+                // Not in a SwiftUI animation: the badge cross-fades to the next agent in Core
+                // Animation (see `AgentWings`).
+                self?.model.glanceRotation += 1
             }
         }
+        timer.tolerance = 0.4
+        glanceTimer = timer
     }
 
     private var shownBadgeWidth: CGFloat = 0

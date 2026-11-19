@@ -9,6 +9,10 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
 
     private let panel: MenuPanel
     private let hosting: SizeReportingHostingView<AnyView>
+    /// The panel's content, in the hosting view only while it's open. A closed panel's SwiftUI
+    /// view kept updating, and animating, with every agent event and Claude usage reading,
+    /// unseen: a few percent of the main thread for as long as an agent works.
+    private let content: AnyView
     private var outsideClickMonitor: Any?
     private var keyMonitor: Any?
     private weak var anchor: NSStatusBarButton?
@@ -17,7 +21,8 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
 
     init(app: AppModel) {
         panel = MenuPanel()
-        hosting = SizeReportingHostingView(rootView: AnyView(MenuPanelView().environment(app)))
+        content = AnyView(MenuPanelView().environment(app))
+        hosting = SizeReportingHostingView(rootView: AnyView(EmptyView()))
         super.init()
 
         hosting.sizingOptions = [.intrinsicContentSize]
@@ -45,6 +50,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     func show(below button: NSStatusBarButton) {
         guard !panel.isVisible else { return }
         anchor = button
+        hosting.rootView = content
         fitToContent()
 
         panel.alphaValue = 0
@@ -77,10 +83,11 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
-        } completionHandler: { [panel] in
+        } completionHandler: { [panel, hosting] in
             MainActor.assumeIsolated {
                 panel.orderOut(nil)
                 panel.alphaValue = 1
+                hosting.rootView = AnyView(EmptyView())
             }
         }
         onVisibilityChange?(false)
